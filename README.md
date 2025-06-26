@@ -746,8 +746,6 @@ mvn install
 |-------|---------|-------------|
 | `AttributeFactory` | `net.cvs0.bytecode.attribute` | Attribute creation utilities |
 | `UnusedCodeAnalyzer` | `net.cvs0.bytecode.analysis` | Dead code detection |
-| `InstructionUtils` | `net.cvs0.bytecode.instruction` | Bytecode instruction helpers |
-| `TypeUtils` | `net.cvs0.bytecode.util` | Type descriptor utilities |
 
 ### Configuration Options
 
@@ -771,7 +769,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ### Development Setup
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/yourusername/bytecode-processor.git`
+2. Clone your fork: `git clone https://github.com/cvs0/bytecode-processor.git`
 3. Create a feature branch: `git checkout -b feature/amazing-feature`
 4. Make your changes and add tests
 5. Run the test suite: `mvn test`
