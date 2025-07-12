@@ -694,6 +694,23 @@ for (ProgramClass clazz : mapping.getProgramClasses()) {
 - Java 11 or higher
 - Maven 3.6+
 
+### Quick Testing (No Setup Required)
+
+Want to test the library immediately on a real JAR file? Use our standalone test utilities:
+
+```bash
+# Quick test with sample JAR (builds and analyzes automatically)
+quick-test.bat
+
+# Test your own JAR file
+analyze-jar.bat path\to\your\file.jar
+
+# PowerShell version
+powershell -ExecutionPolicy Bypass -File analyze-jar.ps1 path\to\your\file.jar
+```
+
+See [TESTING.md](TESTING.md) for detailed testing instructions and examples.
+
 ### Build Commands
 
 ```bash
