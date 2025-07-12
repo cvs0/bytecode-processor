@@ -274,6 +274,18 @@ public class ProgramClass {
         return (access & 0x0001) != 0;
     }
     
+    public boolean isPrivate() {
+        return (access & 0x0002) != 0;
+    }
+    
+    public boolean isProtected() {
+        return (access & 0x0004) != 0;
+    }
+    
+    public boolean isStatic() {
+        return (access & 0x0008) != 0;
+    }
+    
     public boolean isEnum() {
         return (access & 0x4000) != 0;
     }
