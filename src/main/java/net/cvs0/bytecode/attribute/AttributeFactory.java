@@ -63,41 +63,41 @@ public class AttributeFactory {
         if (methodNode == null) {
             return null;
         }
-        
+
         CodeAttribute codeAttribute = new CodeAttribute();
         codeAttribute.setMaxStack(methodNode.maxStack);
         codeAttribute.setMaxLocals(methodNode.maxLocals);
-        
+
         if (methodNode.instructions != null) {
             byte[] codeBytes = new byte[methodNode.instructions.size() * 4];
             codeAttribute.setCode(codeBytes);
         }
-        
+
         if (methodNode.tryCatchBlocks != null) {
             methodNode.tryCatchBlocks.forEach(tcb -> {
-                CodeAttribute.ExceptionHandler handler = new CodeAttribute.ExceptionHandler(
-                    tcb.start.getLabel().getOffset(),
-                    tcb.end.getLabel().getOffset(),
-                    tcb.handler.getLabel().getOffset(),
-                    tcb.type
-                );
-                codeAttribute.addExceptionHandler(handler);
+                try {
+                    int start = tcb.start.getLabel().getOffset();
+                    int end = tcb.end.getLabel().getOffset();
+                    int handlerOffset = tcb.handler.getLabel().getOffset();
+
+                    CodeAttribute.ExceptionHandler handler = new CodeAttribute.ExceptionHandler(
+                            start, end, handlerOffset, tcb.type
+                    );
+                    codeAttribute.addExceptionHandler(handler);
+                } catch (IllegalStateException e) {
+
+                }
             });
         }
-        
+
         if (methodNode.localVariables != null) {
             LocalVariableTableAttribute lvtAttribute = createLocalVariableTable(methodNode.localVariables);
             codeAttribute.addCodeAttribute(lvtAttribute);
         }
-        
-        if (methodNode.instructions != null && methodNode.instructions.getFirst() != null) {
-            // Add line number table if available
-            // This would need to be extracted from the instruction list
-        }
-        
+
         return codeAttribute;
     }
-    
+
     /**
      * Creates an ExceptionsAttribute from a list of exception types.
      */
