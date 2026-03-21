@@ -5,48 +5,62 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Represents the InnerClasses attribute which contains information about
- * inner classes referenced by the class.
+ * Represents the InnerClasses attribute, which stores information about inner classes referenced by a class.
+ * Provides methods for managing and querying inner class entries.
  */
 public class InnerClassesAttribute extends Attribute {
     private final List<InnerClass> innerClasses = new ArrayList<>();
     
+    /**
+     * Constructs an InnerClassesAttribute.
+     */
     public InnerClassesAttribute() {
         super("InnerClasses");
     }
     
+    /**
+     * Adds an inner class entry to this attribute.
+     * @param innerClass the inner class entry
+     */
     public void addInnerClass(InnerClass innerClass) {
         innerClasses.add(innerClass);
     }
     
+    /**
+     * Removes an inner class entry from this attribute.
+     * @param innerClass the inner class entry
+     */
     public void removeInnerClass(InnerClass innerClass) {
         innerClasses.remove(innerClass);
     }
     
+    /**
+     * Returns all inner class entries in this attribute.
+     * @return unmodifiable list of inner class entries
+     */
     public List<InnerClass> getInnerClasses() {
         return Collections.unmodifiableList(innerClasses);
     }
     
-    public InnerClass getInnerClass(String innerClassName) {
-        return innerClasses.stream()
-                .filter(ic -> innerClassName.equals(ic.getInnerClassName()))
-                .findFirst()
-                .orElse(null);
-    }
-    
-    public boolean hasInnerClass(String innerClassName) {
-        return innerClasses.stream()
-                .anyMatch(ic -> innerClassName.equals(ic.getInnerClassName()));
-    }
-    
+    /**
+     * Returns the number of inner class entries in this attribute.
+     * @return the inner class count
+     */
     public int getInnerClassCount() {
         return innerClasses.size();
     }
     
+    /**
+     * Removes all inner class entries from this attribute.
+     */
     public void clearInnerClasses() {
         innerClasses.clear();
     }
     
+    /**
+     * Returns a string representation of this attribute.
+     * @return a string with the number of inner classes
+     */
     @Override
     public String toString() {
         return "InnerClassesAttribute{" +
@@ -54,6 +68,31 @@ public class InnerClassesAttribute extends Attribute {
                 '}';
     }
     
+    /**
+     * Checks equality with another object.
+     * @param o the other object
+     * @return true if equal
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        InnerClassesAttribute that = (InnerClassesAttribute) o;
+        return innerClasses.equals(that.innerClasses);
+    }
+
+    /**
+     * Returns a hash code for this attribute.
+     * @return the hash code
+     */
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + innerClasses.hashCode();
+        return result;
+    }
+
     /**
      * Represents information about a single inner class.
      */

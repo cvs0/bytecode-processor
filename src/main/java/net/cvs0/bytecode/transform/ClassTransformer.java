@@ -9,28 +9,61 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+/**
+ * Performs transformations on classes, methods, and fields within a JarMapping.
+ * Supports renaming and applying custom transformations, with automatic reference updates.
+ */
 public class ClassTransformer {
+    /** The JarMapping to operate on. */
     private final JarMapping mapping;
+    /** Map of old class names to new class names. */
     private final Map<String, String> classNameMappings = new HashMap<>();
+    /** Map of class+field names to new field names. */
     private final Map<String, String> fieldNameMappings = new HashMap<>();
+    /** Map of class+method+descriptor to new method names. */
     private final Map<String, String> methodNameMappings = new HashMap<>();
     
+    /**
+     * Constructs a ClassTransformer for the given JarMapping.
+     * @param mapping the JarMapping to transform
+     */
     public ClassTransformer(JarMapping mapping) {
         this.mapping = mapping;
     }
     
+    /**
+     * Schedules a class to be renamed.
+     * @param oldName the original class name
+     * @param newName the new class name
+     */
     public void renameClass(String oldName, String newName) {
         classNameMappings.put(oldName, newName);
     }
     
+    /**
+     * Schedules a field to be renamed.
+     * @param className the class containing the field
+     * @param oldFieldName the original field name
+     * @param newFieldName the new field name
+     */
     public void renameField(String className, String oldFieldName, String newFieldName) {
         fieldNameMappings.put(className + "." + oldFieldName, newFieldName);
     }
     
+    /**
+     * Schedules a method to be renamed.
+     * @param className the class containing the method
+     * @param oldMethodName the original method name
+     * @param descriptor the method descriptor
+     * @param newMethodName the new method name
+     */
     public void renameMethod(String className, String oldMethodName, String descriptor, String newMethodName) {
         methodNameMappings.put(className + "." + oldMethodName + descriptor, newMethodName);
     }
     
+    /**
+     * Applies all scheduled transformations (renames and reference updates).
+     */
     public void applyTransformations() {
         applyFieldRenames();
         applyMethodRenames();
@@ -38,6 +71,9 @@ public class ClassTransformer {
         updateReferences();
     }
     
+    /**
+     * Applies class renames to the mapping.
+     */
     private void applyClassRenames() {
         for (Map.Entry<String, String> entry : classNameMappings.entrySet()) {
             String oldName = entry.getKey();
@@ -46,6 +82,9 @@ public class ClassTransformer {
         }
     }
     
+    /**
+     * Applies field renames to the mapping.
+     */
     private void applyFieldRenames() {
         for (Map.Entry<String, String> entry : fieldNameMappings.entrySet()) {
             String key = entry.getKey();
@@ -62,6 +101,9 @@ public class ClassTransformer {
         }
     }
     
+    /**
+     * Applies method renames to the mapping.
+     */
     private void applyMethodRenames() {
         for (Map.Entry<String, String> entry : methodNameMappings.entrySet()) {
             String key = entry.getKey();
@@ -82,12 +124,19 @@ public class ClassTransformer {
         }
     }
     
+    /**
+     * Updates all class, field, and method references after renaming.
+     */
     private void updateReferences() {
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             updateClassReferences(clazz);
         }
     }
     
+    /**
+     * Updates references within a single class.
+     * @param clazz the ProgramClass to update
+     */
     private void updateClassReferences(ProgramClass clazz) {
         if (clazz.getSuperName() != null && classNameMappings.containsKey(clazz.getSuperName())) {
             clazz.setSuperName(classNameMappings.get(clazz.getSuperName()));
@@ -105,6 +154,10 @@ public class ClassTransformer {
         }
     }
     
+    /**
+     * Updates references within a single method.
+     * @param method the ProgramMethod to update
+     */
     private void updateMethodReferences(ProgramMethod method) {
         if (method.getMethodNode() != null && method.getMethodNode().instructions != null) {
             method.getMethodNode().instructions.forEach(insn -> {
@@ -145,6 +198,10 @@ public class ClassTransformer {
         }
     }
     
+    /**
+     * Applies a transformation function to all classes.
+     * @param transformer the function to apply
+     */
     public void transformClasses(Function<ProgramClass, ProgramClass> transformer) {
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             ProgramClass transformed = transformer.apply(clazz);
@@ -155,6 +212,10 @@ public class ClassTransformer {
         }
     }
     
+    /**
+     * Applies a transformation function to all methods.
+     * @param transformer the function to apply
+     */
     public void transformMethods(Function<ProgramMethod, ProgramMethod> transformer) {
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
@@ -167,6 +228,10 @@ public class ClassTransformer {
         }
     }
     
+    /**
+     * Applies a transformation function to all fields.
+     * @param transformer the function to apply
+     */
     public void transformFields(Function<ProgramField, ProgramField> transformer) {
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramField field : clazz.getFields()) {
@@ -179,18 +244,33 @@ public class ClassTransformer {
         }
     }
     
+    /**
+     * Returns a copy of the class name mappings.
+     * @return a map of old to new class names
+     */
     public Map<String, String> getClassNameMappings() {
         return new HashMap<>(classNameMappings);
     }
     
+    /**
+     * Returns a copy of the field name mappings.
+     * @return a map of class+field to new field names
+     */
     public Map<String, String> getFieldNameMappings() {
         return new HashMap<>(fieldNameMappings);
     }
     
+    /**
+     * Returns a copy of the method name mappings.
+     * @return a map of class+method+descriptor to new method names
+     */
     public Map<String, String> getMethodNameMappings() {
         return new HashMap<>(methodNameMappings);
     }
     
+    /**
+     * Clears all scheduled renames.
+     */
     public void clearMappings() {
         classNameMappings.clear();
         fieldNameMappings.clear();
