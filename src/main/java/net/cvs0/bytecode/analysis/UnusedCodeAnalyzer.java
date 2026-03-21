@@ -8,58 +8,74 @@ import org.objectweb.asm.tree.*;
 
 import java.util.*;
 
+/**
+ * Utility class for analyzing unused code in a JarMapping.
+ * Provides methods to find unused methods, fields, dead code, and method complexity.
+ */
 public class UnusedCodeAnalyzer {
-    
+    /**
+     * Finds all unused methods in the given JarMapping.
+     * @param mapping the JarMapping to analyze
+     * @return set of unused method keys
+     */
     public static Set<String> findUnusedMethods(JarMapping mapping) {
         Set<String> allMethods = new HashSet<>();
         Set<String> referencedMethods = new HashSet<>();
-        
+
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
                 String methodKey = clazz.getName() + "." + method.getName() + method.getDescriptor();
                 allMethods.add(methodKey);
-                
+
                 if (isEntryPoint(method)) {
                     referencedMethods.add(methodKey);
                 }
             }
         }
-        
+
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
                 referencedMethods.addAll(findMethodReferences(method));
             }
         }
-        
+
         Set<String> unusedMethods = new HashSet<>(allMethods);
         unusedMethods.removeAll(referencedMethods);
-        
+
         return unusedMethods;
     }
-    
+    /**
+     * Finds all unused fields in the given JarMapping.
+     * @param mapping the JarMapping to analyze
+     * @return set of unused field keys
+     */
     public static Set<String> findUnusedFields(JarMapping mapping) {
         Set<String> allFields = new HashSet<>();
         Set<String> referencedFields = new HashSet<>();
-        
+
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramField field : clazz.getFields()) {
                 String fieldKey = clazz.getName() + "." + field.getName();
                 allFields.add(fieldKey);
             }
         }
-        
+
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
                 referencedFields.addAll(findFieldReferences(method));
             }
         }
-        
+
         Set<String> unusedFields = new HashSet<>(allFields);
         unusedFields.removeAll(referencedFields);
-        
+
         return unusedFields;
     }
-    
+    /**
+     * Returns true if the method is an entry point (public main, constructor, or getter/setter).
+     * @param method the ProgramMethod
+     * @return true if entry point
+     */
     private static boolean isEntryPoint(ProgramMethod method) {
         return method.isPublic() && 
                ("main".equals(method.getName()) || 
@@ -68,10 +84,14 @@ public class UnusedCodeAnalyzer {
                 method.getName().startsWith("set") ||
                 method.getName().startsWith("is"));
     }
-    
+    /**
+     * Finds all method references in the given method's bytecode.
+     * @param method the ProgramMethod
+     * @return set of referenced method keys
+     */
     private static Set<String> findMethodReferences(ProgramMethod method) {
         Set<String> references = new HashSet<>();
-        
+
         if (method.getMethodNode() != null && method.getMethodNode().instructions != null) {
             for (AbstractInsnNode insn : method.getMethodNode().instructions) {
                 if (insn instanceof MethodInsnNode) {
@@ -81,13 +101,17 @@ public class UnusedCodeAnalyzer {
                 }
             }
         }
-        
+
         return references;
     }
-    
+    /**
+     * Finds all field references in the given method's bytecode.
+     * @param method the ProgramMethod
+     * @return set of referenced field keys
+     */
     private static Set<String> findFieldReferences(ProgramMethod method) {
         Set<String> references = new HashSet<>();
-        
+
         if (method.getMethodNode() != null && method.getMethodNode().instructions != null) {
             for (AbstractInsnNode insn : method.getMethodNode().instructions) {
                 if (insn instanceof FieldInsnNode) {
@@ -97,30 +121,38 @@ public class UnusedCodeAnalyzer {
                 }
             }
         }
-        
+
         return references;
     }
-    
+    /**
+     * Returns a map of method keys to their calculated complexity.
+     * @param mapping the JarMapping
+     * @return map of method keys to complexity values
+     */
     public static Map<String, Integer> getMethodComplexity(JarMapping mapping) {
         Map<String, Integer> complexity = new HashMap<>();
-        
+
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
                 String methodKey = clazz.getName() + "." + method.getName() + method.getDescriptor();
                 complexity.put(methodKey, calculateMethodComplexity(method));
             }
         }
-        
+
         return complexity;
     }
-    
+    /**
+     * Calculates the cyclomatic complexity of a method.
+     * @param method the ProgramMethod
+     * @return the complexity value
+     */
     private static int calculateMethodComplexity(ProgramMethod method) {
         if (method.getMethodNode() == null || method.getMethodNode().instructions == null) {
             return 0;
         }
-        
+
         int complexity = 1;
-        
+
         for (AbstractInsnNode insn : method.getMethodNode().instructions) {
             switch (insn.getOpcode()) {
                 case 153: case 154: case 155: case 156: case 157: case 158:
@@ -132,13 +164,17 @@ public class UnusedCodeAnalyzer {
                     break;
             }
         }
-        
+
         return complexity;
     }
-    
+    /**
+     * Finds all methods with unreachable code (dead code) in the mapping.
+     * @param mapping the JarMapping
+     * @return set of method keys with dead code
+     */
     public static Set<String> findDeadCode(JarMapping mapping) {
         Set<String> deadCode = new HashSet<>();
-        
+
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
                 if (hasUnreachableCode(method)) {
@@ -147,33 +183,37 @@ public class UnusedCodeAnalyzer {
                 }
             }
         }
-        
+
         return deadCode;
     }
-    
+    /**
+     * Returns true if the method contains unreachable code.
+     * @param method the ProgramMethod
+     * @return true if unreachable code exists
+     */
     private static boolean hasUnreachableCode(ProgramMethod method) {
         if (method.getMethodNode() == null || method.getMethodNode().instructions == null) {
             return false;
         }
-        
+
         Set<AbstractInsnNode> reachable = new HashSet<>();
         Queue<AbstractInsnNode> queue = new LinkedList<>();
-        
+
         AbstractInsnNode first = method.getMethodNode().instructions.getFirst();
         if (first != null) {
             queue.add(first);
             reachable.add(first);
         }
-        
+
         while (!queue.isEmpty()) {
             AbstractInsnNode current = queue.poll();
             AbstractInsnNode next = current.getNext();
-            
+
             if (next != null && !reachable.contains(next)) {
                 reachable.add(next);
                 queue.add(next);
             }
-            
+
             if (current instanceof JumpInsnNode) {
                 JumpInsnNode jumpInsn = (JumpInsnNode) current;
                 if (!reachable.contains(jumpInsn.label)) {
@@ -182,20 +222,25 @@ public class UnusedCodeAnalyzer {
                 }
             }
         }
-        
+
         return reachable.size() < method.getMethodNode().instructions.size();
     }
-    
+    /**
+     * Returns a list of the largest methods by instruction count.
+     * @param mapping the JarMapping
+     * @param limit the maximum number of methods to return
+     * @return list of method keys
+     */
     public static List<String> getLargestMethods(JarMapping mapping, int limit) {
         Map<String, Integer> methodSizes = new HashMap<>();
-        
+
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
                 String methodKey = clazz.getName() + "." + method.getName() + method.getDescriptor();
                 methodSizes.put(methodKey, method.getInstructionCount());
             }
         }
-        
+
         return methodSizes.entrySet().stream()
                 .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                 .limit(limit)

@@ -2,59 +2,108 @@ package net.cvs0.bytecode.instruction;
 
 import org.objectweb.asm.tree.AbstractInsnNode;
 
+/**
+ * Represents a bytecode instruction, wrapping ASM's AbstractInsnNode and providing utility methods.
+ * Supports opcode/type access and classification helpers for all JVM instruction types.
+ */
 public class Instruction {
     private AbstractInsnNode instructionNode;
     private int opcode;
     private int type;
     
+    /**
+     * Constructs an Instruction from an ASM AbstractInsnNode.
+     * @param instructionNode the ASM instruction node
+     */
     public Instruction(AbstractInsnNode instructionNode) {
         this.instructionNode = instructionNode;
         this.opcode = instructionNode.getOpcode();
         this.type = instructionNode.getType();
     }
-    
+
+    /**
+     * Constructs an Instruction with a specific opcode.
+     * @param opcode the opcode value
+     */
     public Instruction(int opcode) {
         this.opcode = opcode;
     }
-    
+
+    /**
+     * Returns the underlying ASM instruction node.
+     * @return the AbstractInsnNode
+     */
     public AbstractInsnNode getInstructionNode() {
         return instructionNode;
     }
-    
+
+    /**
+     * Sets the underlying ASM instruction node and updates opcode/type.
+     * @param instructionNode the new ASM node
+     */
     public void setInstructionNode(AbstractInsnNode instructionNode) {
         this.instructionNode = instructionNode;
         this.opcode = instructionNode.getOpcode();
         this.type = instructionNode.getType();
     }
-    
+
+    /**
+     * Returns the opcode of this instruction.
+     * @return the opcode value
+     */
     public int getOpcode() {
         return opcode;
     }
-    
+
+    /**
+     * Sets the opcode of this instruction.
+     * @param opcode the opcode value
+     */
     public void setOpcode(int opcode) {
         this.opcode = opcode;
     }
-    
+
+    /**
+     * Returns the type of this instruction (see ASM AbstractInsnNode constants).
+     * @return the type value
+     */
     public int getType() {
         return type;
     }
-    
+
+    /**
+     * Sets the type of this instruction.
+     * @param type the type value
+     */
     public void setType(int type) {
         this.type = type;
     }
+
     
+    /**
+     * Returns true if this is a simple instruction (INSN).
+     */
     public boolean isInsn() {
         return type == AbstractInsnNode.INSN;
     }
-    
+
+    /**
+     * Returns true if this is an integer instruction (INT_INSN).
+     */
     public boolean isIntInsn() {
         return type == AbstractInsnNode.INT_INSN;
     }
-    
+
+    /**
+     * Returns true if this is a variable instruction (VAR_INSN).
+     */
     public boolean isVarInsn() {
         return type == AbstractInsnNode.VAR_INSN;
     }
-    
+
+    /**
+     * Returns true if this is a type instruction (TYPE_INSN).
+     */
     public boolean isTypeInsn() {
         return type == AbstractInsnNode.TYPE_INSN;
     }
@@ -107,10 +156,19 @@ public class Instruction {
         return type == AbstractInsnNode.LINE;
     }
     
+    /**
+     * Returns the name of the opcode for this instruction.
+     * @return the opcode name
+     */
     public String getOpcodeName() {
         return getOpcodeName(opcode);
     }
-    
+
+    /**
+     * Returns the name of the given opcode value.
+     * @param opcode the opcode value
+     * @return the opcode name
+     */
     public static String getOpcodeName(int opcode) {
         switch (opcode) {
             case -1: return "UNKNOWN";
@@ -319,7 +377,11 @@ public class Instruction {
             default: return "UNKNOWN_" + opcode;
         }
     }
-    
+
+    /**
+     * Returns a string representation of this instruction.
+     * @return a string with opcode name and value
+     */
     @Override
     public String toString() {
         return getOpcodeName() + " (" + opcode + ")";

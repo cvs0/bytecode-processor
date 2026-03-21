@@ -6,6 +6,7 @@ import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.member.ProgramMethod;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -45,11 +46,16 @@ public class JarAnalyzer {
     
     private static void analyzeJar(String jarPath) {
         long startTime = System.currentTimeMillis();
-        
         // Load the JAR
         System.out.println("📦 Loading JAR file...");
-        JarMapping mapping = new JarMapping(jarPath);
-        
+        JarMapping mapping;
+        try {
+            mapping = JarMapping.fromJar(jarPath);
+        } catch (IOException e) {
+            System.err.println("❌ Failed to load JAR: " + e.getMessage());
+            e.printStackTrace();
+            return;
+        }
         Collection<ProgramClass> classes = mapping.getProgramClasses();
         System.out.println("✅ Loaded " + classes.size() + " classes");
         System.out.println();
@@ -152,7 +158,6 @@ public class JarAnalyzer {
         
         Collection<ProgramClass> classes = mapping.getProgramClasses();
         
-        // Find most complex classes (by method count)
         List<ProgramClass> sortedByMethods = classes.stream()
                 .sorted((a, b) -> Integer.compare(b.getMethods().size(), a.getMethods().size()))
                 .limit(5)
@@ -166,14 +171,18 @@ public class JarAnalyzer {
                              clazz.getFields().size() + " fields)");
         }
         System.out.println();
-        
-        // Find classes with most dependencies
+
+        if (classes.isEmpty()) {
+            System.out.println("No classes found in the JAR. Skipping sample class analysis.");
+            System.out.println();
+            return;
+        }
+
         System.out.println("Sample class analysis:");
         ProgramClass sampleClass = classes.stream()
                 .filter(c -> !c.getName().startsWith("java/"))
                 .findFirst()
                 .orElse(classes.iterator().next());
-        
         if (sampleClass != null) {
             System.out.println("Class: " + sampleClass.getName());
             System.out.println("  Package: " + sampleClass.getPackageName());
@@ -184,7 +193,7 @@ public class JarAnalyzer {
             System.out.println("  Methods: " + sampleClass.getMethods().size());
             System.out.println("  Fields: " + sampleClass.getFields().size());
             
-            // Show some methods
+
             if (!sampleClass.getMethods().isEmpty()) {
                 System.out.println("  Sample methods:");
                 sampleClass.getMethods().stream()
@@ -195,7 +204,7 @@ public class JarAnalyzer {
                         });
             }
             
-            // Try to find dependencies for this class
+
             try {
                 Set<String> classDeps = DependencyAnalyzer.findClassDependencies(sampleClass);
                 System.out.println("  Dependencies: " + classDeps.size());

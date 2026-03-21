@@ -7,70 +7,62 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Represents the LocalVariableTypeTable attribute which provides signature
- * information for local variables that have generic types.
+ * Represents the LocalVariableTypeTable attribute, which stores generic type information for local variables.
+ * Provides methods for managing and querying local variable types.
  */
 public class LocalVariableTypeTableAttribute extends Attribute {
     private final List<LocalVariableType> localVariableTypes = new ArrayList<>();
     
+    /**
+     * Constructs a LocalVariableTypeTableAttribute.
+     */
     public LocalVariableTypeTableAttribute() {
         super("LocalVariableTypeTable");
     }
     
+    /**
+     * Adds a local variable type entry to this attribute.
+     * @param localVariableType the local variable type string
+     */
     public void addLocalVariableType(LocalVariableType localVariableType) {
         localVariableTypes.add(localVariableType);
     }
     
+    /**
+     * Removes a local variable type entry from this attribute.
+     * @param localVariableType the local variable type string
+     */
     public void removeLocalVariableType(LocalVariableType localVariableType) {
         localVariableTypes.remove(localVariableType);
     }
     
+    /**
+     * Returns all local variable types in this attribute.
+     * @return unmodifiable list of local variable types
+     */
     public List<LocalVariableType> getLocalVariableTypes() {
         return Collections.unmodifiableList(localVariableTypes);
     }
     
-    public LocalVariableType getLocalVariableTypeByIndex(int index) {
-        return localVariableTypes.stream()
-                .filter(lvt -> lvt.getIndex() == index)
-                .findFirst()
-                .orElse(null);
-    }
-    
-    public List<LocalVariableType> getActiveVariableTypesAtPc(int pc) {
-        return localVariableTypes.stream()
-                .filter(lvt -> lvt.isActive(pc))
-                .toList();
-    }
-    
-    public LocalVariableType getVariableTypeByName(String name) {
-        return localVariableTypes.stream()
-                .filter(lvt -> name.equals(lvt.getName()))
-                .findFirst()
-                .orElse(null);
-    }
-    
+    /**
+     * Returns the number of local variable types in this attribute.
+     * @return the local variable type count
+     */
     public int getLocalVariableTypeCount() {
         return localVariableTypes.size();
     }
     
+    /**
+     * Removes all local variable types from this attribute.
+     */
     public void clearLocalVariableTypes() {
         localVariableTypes.clear();
     }
     
-    public boolean hasVariableType(String name) {
-        return localVariableTypes.stream().anyMatch(lvt -> name.equals(lvt.getName()));
-    }
-    
-    public void sortLocalVariableTypes() {
-        localVariableTypes.sort((a, b) -> {
-            int indexCompare = Integer.compare(a.getIndex(), b.getIndex());
-            if (indexCompare != 0) {
-                return indexCompare;
-            }
-            return Integer.compare(a.getStartPc(), b.getStartPc());
-        });
-    }
-    
+    /**
+     * Returns a string representation of this attribute.
+     * @return a string with the number of local variable types
+     */
     @Override
     public String toString() {
         return "LocalVariableTypeTableAttribute{" +
@@ -78,6 +70,31 @@ public class LocalVariableTypeTableAttribute extends Attribute {
                 '}';
     }
     
+    /**
+     * Checks equality with another object.
+     * @param o the other object
+     * @return true if equal
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        LocalVariableTypeTableAttribute that = (LocalVariableTypeTableAttribute) o;
+        return localVariableTypes.equals(that.localVariableTypes);
+    }
+
+    /**
+     * Returns a hash code for this attribute.
+     * @return the hash code
+     */
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + localVariableTypes.hashCode();
+        return result;
+    }
+
     /**
      * Represents type information for a local variable with generic signature.
      */

@@ -3,7 +3,7 @@ package net.cvs0.bytecode.analysis;
 import net.cvs0.bytecode.JarMapping;
 import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.member.ProgramMethod;
-import net.cvs0.bytecode.instruction.Instruction;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 import java.util.*;
@@ -25,7 +25,6 @@ import java.util.*;
  * interface implementations, method signatures, and bytecode instructions.
  */
 public class DependencyAnalyzer {
-    
     /**
      * Finds all dependencies for a given class.
      * 
@@ -131,16 +130,16 @@ public class DependencyAnalyzer {
      */
     private static Set<String> extractTypesFromDescriptor(String descriptor) {
         Set<String> types = new HashSet<>();
-        org.objectweb.asm.Type[] argumentTypes = org.objectweb.asm.Type.getArgumentTypes(descriptor);
-        org.objectweb.asm.Type returnType = org.objectweb.asm.Type.getReturnType(descriptor);
+        Type[] argumentTypes = Type.getArgumentTypes(descriptor);
+        Type returnType = Type.getReturnType(descriptor);
         
-        for (org.objectweb.asm.Type type : argumentTypes) {
-            if (type.getSort() == org.objectweb.asm.Type.OBJECT) {
+        for (Type type : argumentTypes) {
+            if (type.getSort() == Type.OBJECT) {
                 types.add(type.getInternalName());
             }
         }
         
-        if (returnType.getSort() == org.objectweb.asm.Type.OBJECT) {
+        if (returnType.getSort() == Type.OBJECT) {
             types.add(returnType.getInternalName());
         }
         

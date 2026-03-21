@@ -7,7 +7,15 @@ import org.objectweb.asm.tree.FieldNode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
+/**
+ * Represents a field in a program class, including its name, descriptor, signature, access flags, value, and attributes.
+ * Provides methods for manipulating field structure, metadata, and ASM FieldNode integration.
+ * 
+ * This class serves as a bridge between the bytecode representation of a field and its corresponding ASM FieldNode.
+ * It provides a convenient API for accessing and modifying field metadata, as well as integrating with ASM for bytecode manipulation.
+ */
 public class ProgramField {
     private String name;
     private String descriptor;
@@ -20,21 +28,22 @@ public class ProgramField {
     private FieldNode fieldNode;
     
     public ProgramField(String name, String descriptor, int access) {
-        this.name = name;
-        this.descriptor = descriptor;
+        this.name = Objects.requireNonNull(name, "Field name cannot be null");
+        this.descriptor = Objects.requireNonNull(descriptor, "Field descriptor cannot be null");
         this.access = access;
     }
     
     public ProgramField(FieldNode fieldNode) {
-        this.fieldNode = fieldNode;
-        this.name = fieldNode.name;
-        this.descriptor = fieldNode.desc;
-        this.signature = fieldNode.signature;
-        this.access = fieldNode.access;
-        this.value = fieldNode.value;
+        this.fieldNode = Objects.requireNonNull(fieldNode, "FieldNode cannot be null");
+        this.name = this.fieldNode.name;
+        this.descriptor = this.fieldNode.desc;
+        this.signature = this.fieldNode.signature;
+        this.access = this.fieldNode.access;
+        this.value = this.fieldNode.value;
     }
     
     public void addAttribute(Attribute attribute) {
+        Objects.requireNonNull(attribute, "Attribute cannot be null");
         attributes.add(attribute);
     }
     
