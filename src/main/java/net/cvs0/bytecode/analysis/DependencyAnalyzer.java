@@ -315,4 +315,69 @@ public class DependencyAnalyzer {
         
         return result;
     }
+
+    /**
+     * Builds a reverse dependency graph: for each class, the set of program classes that depend on it.
+     *
+     * @param mapping jar mapping (only {@link ProgramClass} names appear as keys)
+     * @return map from depended-on class name to set of dependent internal class names
+     */
+    public static Map<String, Set<String>> buildReverseDependencyGraph(JarMapping mapping) {
+        Map<String, Set<String>> forward = buildDependencyGraph(mapping);
+        Map<String, Set<String>> reverse = new HashMap<>();
+        for (ProgramClass clazz : mapping.getProgramClasses()) {
+            reverse.putIfAbsent(clazz.getName(), new HashSet<>());
+        }
+        for (Map.Entry<String, Set<String>> entry : forward.entrySet()) {
+            String dependent = entry.getKey();
+            for (String dependency : entry.getValue()) {
+                reverse.computeIfAbsent(dependency, k -> new HashSet<>()).add(dependent);
+            }
+        }
+        return reverse;
+    }
+
+    /**
+     * Returns program classes that directly depend on the given internal class name.
+     *
+     * @param mapping   jar mapping
+     * @param className internal name of the depended-on type
+     * @return dependents that appear as program classes in the mapping (may be empty)
+     */
+    public static Set<String> findDependents(JarMapping mapping, String className) {
+        Set<String> dependents = new HashSet<>();
+        Map<String, Set<String>> graph = buildDependencyGraph(mapping);
+        for (Map.Entry<String, Set<String>> entry : graph.entrySet()) {
+            if (entry.getValue().contains(className)) {
+                dependents.add(entry.getKey());
+            }
+        }
+        return dependents;
+    }
+
+    /**
+     * Exports a forward dependency graph as Graphviz DOT (digraph). Node IDs are quoted and backslash-escaped.
+     *
+     * @param dependencyGraph map from class name to dependencies (e.g. from {@link #buildDependencyGraph})
+     * @param graphId         identifier for the digraph statement
+     * @return DOT source text
+     */
+    public static String toDotFormat(Map<String, Set<String>> dependencyGraph, String graphId) {
+        String id = graphId == null || graphId.isBlank() ? "dependencies" : graphId.replaceAll("[^a-zA-Z0-9_]", "_");
+        StringBuilder sb = new StringBuilder();
+        sb.append("digraph ").append(id).append(" {\n");
+        sb.append("  rankdir=LR;\n");
+        for (Map.Entry<String, Set<String>> entry : dependencyGraph.entrySet()) {
+            String from = dotEscape(entry.getKey());
+            for (String to : entry.getValue()) {
+                sb.append("  \"").append(from).append("\" -> \"").append(dotEscape(to)).append("\";\n");
+            }
+        }
+        sb.append("}\n");
+        return sb.toString();
+    }
+
+    private static String dotEscape(String internalName) {
+        return internalName.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
 }

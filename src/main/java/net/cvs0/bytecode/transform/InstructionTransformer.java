@@ -2,6 +2,7 @@ package net.cvs0.bytecode.transform;
 
 import net.cvs0.bytecode.instruction.Instruction;
 import net.cvs0.bytecode.member.ProgramMethod;
+import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 
 import java.util.ArrayList;
@@ -159,7 +160,12 @@ public class InstructionTransformer {
     
     private boolean isReturnInstruction(AbstractInsnNode insn) {
         int opcode = insn.getOpcode();
-        return opcode >= 172 && opcode <= 177;
+        return opcode == Opcodes.IRETURN
+                || opcode == Opcodes.LRETURN
+                || opcode == Opcodes.FRETURN
+                || opcode == Opcodes.DRETURN
+                || opcode == Opcodes.ARETURN
+                || opcode == Opcodes.RETURN;
     }
     
     public void wrapWithTryCatch(String exceptionType, AbstractInsnNode... catchInstructions) {

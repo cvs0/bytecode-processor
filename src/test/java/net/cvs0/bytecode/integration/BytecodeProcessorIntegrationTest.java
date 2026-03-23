@@ -119,8 +119,8 @@ class BytecodeProcessorIntegrationTest {
         assertEquals(2, pluginManager.getPluginCount());
         assertEquals(2, pluginManager.getEnabledPluginCount());
         
-        pluginManager.processWithPlugins(jarMapping);
-        
+        assertTrue(pluginManager.processWithPlugins(jarMapping));
+
         assertTrue(obfuscationPlugin.isEnabled());
         assertTrue(optimizationPlugin.isEnabled());
     }

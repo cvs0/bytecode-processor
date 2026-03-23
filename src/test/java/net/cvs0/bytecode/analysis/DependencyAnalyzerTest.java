@@ -83,12 +83,8 @@ class DependencyAnalyzerTest {
     
     @Test
     void testGetTopologicalOrder() {
-        Map<String, Set<String>> depGraph = DependencyAnalyzer.buildDependencyGraph(jarMapping);
-        System.out.println("Dependency Graph: " + depGraph);
-        
         List<String> topologicalOrder = DependencyAnalyzer.getTopologicalOrder(jarMapping);
-        System.out.println("Topological Order: " + topologicalOrder);
-        
+
         assertEquals(3, topologicalOrder.size());
         
         int indexA = topologicalOrder.indexOf("com/example/ClassA");
@@ -122,5 +118,35 @@ class DependencyAnalyzerTest {
         Set<String> dependencies = DependencyAnalyzer.findMethodDependencies(method);
         
         assertTrue(dependencies.isEmpty());
+    }
+
+    @Test
+    void testBuildReverseDependencyGraph() {
+        Map<String, Set<String>> reverse = DependencyAnalyzer.buildReverseDependencyGraph(jarMapping);
+        assertTrue(reverse.getOrDefault("com/example/ClassA", Set.of()).contains("com/example/ClassB"));
+    }
+
+    @Test
+    void testFindDependents() {
+        Set<String> deps = DependencyAnalyzer.findDependents(jarMapping, "com/example/ClassA");
+        assertTrue(deps.contains("com/example/ClassB"));
+    }
+
+    @Test
+    void testToDotFormat() {
+        Map<String, Set<String>> g = Map.of(
+                "A", Set.of("B"),
+                "B", Set.of("C"));
+        String dot = DependencyAnalyzer.toDotFormat(g, "g1");
+        assertTrue(dot.contains("digraph g1"));
+        assertTrue(dot.contains("\"A\" -> \"B\""));
+        assertTrue(dot.contains("\"B\" -> \"C\""));
+    }
+
+    @Test
+    void testToDotFormatEscapesQuotesInNames() {
+        Map<String, Set<String>> g = Map.of("com/weird\"Name", Set.of("b"));
+        String dot = DependencyAnalyzer.toDotFormat(g, "g2");
+        assertTrue(dot.contains("\\\""), "DOT should escape embedded quotes");
     }
 }

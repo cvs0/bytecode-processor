@@ -1,5 +1,7 @@
 module bytecode.processor {
+    requires java.logging;
     requires org.objectweb.asm.tree;
+    requires info.picocli;
 
     exports net.cvs0.bytecode;
     exports net.cvs0.bytecode.attribute;
@@ -11,4 +13,6 @@ module bytecode.processor {
     exports net.cvs0.bytecode.plugin;
     exports net.cvs0.bytecode.test;
     exports net.cvs0.bytecode.transform;
+
+    opens net.cvs0.bytecode.cli to info.picocli;
 }

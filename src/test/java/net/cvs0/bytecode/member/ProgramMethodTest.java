@@ -4,6 +4,9 @@ import net.cvs0.bytecode.instruction.Instruction;
 import net.cvs0.bytecode.attribute.Attribute;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.MethodNode;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -50,6 +53,16 @@ class ProgramMethodTest {
         assertArrayEquals(exceptions, method.getExceptions());
     }
     
+    @Test
+    void insertInstructionAtEndSyncsInsnList() {
+        MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, "m", "()V", null, null);
+        mn.instructions.add(new InsnNode(Opcodes.RETURN));
+        ProgramMethod pm = new ProgramMethod(mn);
+        Instruction nop = new Instruction(new InsnNode(Opcodes.NOP));
+        pm.insertInstruction(pm.getInstructions().size(), nop);
+        assertEquals(2, mn.instructions.size());
+    }
+
     @Test
     void testInstructions() {
         Instruction insn1 = new Instruction(1);

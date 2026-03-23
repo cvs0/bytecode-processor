@@ -5,6 +5,7 @@ import net.cvs0.bytecode.clazz.ProgramClass;
 import org.objectweb.asm.ClassWriter;
 
 import java.io.*;
+import java.nio.file.Path;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
@@ -14,6 +15,9 @@ import java.util.jar.Manifest;
  * Supports writing entire JarMapping contents, individual classes, and resources.
  */
 public class JarWriter {
+
+    /** Written implicitly by {@link JarOutputStream#JarOutputStream(OutputStream, Manifest)} — must not be duplicated as a resource. */
+    private static final String MANIFEST_ENTRY = "META-INF/MANIFEST.MF";
     /**
      * Writes all classes and resources from the mapping to the specified output JAR file.
      * Uses a default manifest.
@@ -21,6 +25,13 @@ public class JarWriter {
      * @param outputFile the output JAR file
      * @throws IOException if writing fails
      */
+    /**
+     * Writes the mapping to a JAR file at the given path.
+     */
+    public static void write(JarMapping mapping, Path outputPath) throws IOException {
+        write(mapping, outputPath.toFile());
+    }
+
     public static void write(JarMapping mapping, File outputFile) throws IOException {
         try (FileOutputStream fos = new FileOutputStream(outputFile);
              JarOutputStream jos = new JarOutputStream(fos, createDefaultManifest())) {
@@ -30,6 +41,9 @@ public class JarWriter {
             }
             
             for (String resourceName : mapping.getResourceNames()) {
+                if (MANIFEST_ENTRY.equals(resourceName)) {
+                    continue;
+                }
                 writeResourceEntry(jos, resourceName, mapping.getResource(resourceName));
             }
         }
@@ -51,6 +65,9 @@ public class JarWriter {
             }
             
             for (String resourceName : mapping.getResourceNames()) {
+                if (MANIFEST_ENTRY.equals(resourceName)) {
+                    continue;
+                }
                 writeResourceEntry(jos, resourceName, mapping.getResource(resourceName));
             }
         }

@@ -5,6 +5,8 @@ import net.cvs0.bytecode.member.InnerClass;
 import net.cvs0.bytecode.member.ProgramField;
 import net.cvs0.bytecode.member.ProgramMethod;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.RecordComponentNode;
 
 import java.util.*;
@@ -93,6 +95,19 @@ public class ProgramClass {
     public void addField(ProgramField field) {
         fields.put(field.getName(), field);
         field.setOwner(this);
+        if (classNode != null) {
+            if (classNode.fields == null) {
+                classNode.fields = new ArrayList<>();
+            }
+            FieldNode fn = field.getFieldNode();
+            if (fn == null) {
+                fn = new FieldNode(field.getAccess(), field.getName(), field.getDescriptor(), field.getSignature(), field.getValue());
+                field.setFieldNode(fn);
+            }
+            if (!classNode.fields.contains(fn)) {
+                classNode.fields.add(fn);
+            }
+        }
     }
 
     /**
@@ -103,6 +118,21 @@ public class ProgramClass {
         String key = method.getName() + method.getDescriptor();
         methods.put(key, method);
         method.setOwner(this);
+        if (classNode != null) {
+            if (classNode.methods == null) {
+                classNode.methods = new ArrayList<>();
+            }
+            MethodNode mn = method.getMethodNode();
+            if (mn == null) {
+                String[] ex = method.getExceptions();
+                String[] exForCtor = ex != null && ex.length > 0 ? ex.clone() : null;
+                mn = new MethodNode(method.getAccess(), method.getName(), method.getDescriptor(), method.getSignature(), exForCtor);
+                method.setMethodNode(mn);
+            }
+            if (!classNode.methods.contains(mn)) {
+                classNode.methods.add(mn);
+            }
+        }
     }
 
     /**
@@ -188,6 +218,13 @@ public class ProgramClass {
         ProgramField field = fields.remove(name);
         if (field != null) {
             field.setOwner(null);
+            if (classNode != null && classNode.fields != null) {
+                if (field.getFieldNode() != null) {
+                    classNode.fields.remove(field.getFieldNode());
+                } else {
+                    classNode.fields.removeIf(fn -> name.equals(fn.name));
+                }
+            }
         }
     }
 
@@ -200,6 +237,13 @@ public class ProgramClass {
         ProgramMethod method = methods.remove(name + descriptor);
         if (method != null) {
             method.setOwner(null);
+            if (classNode != null && classNode.methods != null) {
+                if (method.getMethodNode() != null) {
+                    classNode.methods.remove(method.getMethodNode());
+                } else {
+                    classNode.methods.removeIf(m -> name.equals(m.name) && descriptor.equals(m.desc));
+                }
+            }
         }
     }
 
@@ -564,6 +608,9 @@ public class ProgramClass {
      */
     public void setClassVersion(int classVersion) {
         this.classVersion = classVersion;
+        if (classNode != null) {
+            classNode.version = classVersion;
+        }
     }
 
     /**
@@ -580,6 +627,14 @@ public class ProgramClass {
      */
     public void addRecordComponent(RecordComponentNode rc) {
         recordComponents.add(rc);
+        if (classNode != null) {
+            if (classNode.recordComponents == null) {
+                classNode.recordComponents = new ArrayList<>();
+            }
+            if (!classNode.recordComponents.contains(rc)) {
+                classNode.recordComponents.add(rc);
+            }
+        }
     }
 
     /**
@@ -596,6 +651,9 @@ public class ProgramClass {
      */
     public void setNestHostClass(String nestHostClass) {
         this.nestHostClass = nestHostClass;
+        if (classNode != null) {
+            classNode.nestHostClass = nestHostClass;
+        }
     }
 
     /**
@@ -611,7 +669,20 @@ public class ProgramClass {
      * @param member the nest member class name
      */
     public void addNestMember(String member) {
-        nestMembers.add(member);
+        if (member == null) {
+            return;
+        }
+        if (!nestMembers.contains(member)) {
+            nestMembers.add(member);
+        }
+        if (classNode != null) {
+            if (classNode.nestMembers == null) {
+                classNode.nestMembers = new ArrayList<>();
+            }
+            if (!classNode.nestMembers.contains(member)) {
+                classNode.nestMembers.add(member);
+            }
+        }
     }
 
     /**
@@ -627,6 +698,19 @@ public class ProgramClass {
      * @param subclass the permitted subclass name
      */
     public void addPermittedSubclass(String subclass) {
-        permittedSubclasses.add(subclass);
+        if (subclass == null) {
+            return;
+        }
+        if (!permittedSubclasses.contains(subclass)) {
+            permittedSubclasses.add(subclass);
+        }
+        if (classNode != null) {
+            if (classNode.permittedSubclasses == null) {
+                classNode.permittedSubclasses = new ArrayList<>();
+            }
+            if (!classNode.permittedSubclasses.contains(subclass)) {
+                classNode.permittedSubclasses.add(subclass);
+            }
+        }
     }
 }

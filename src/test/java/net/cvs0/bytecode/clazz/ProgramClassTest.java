@@ -5,6 +5,8 @@ import net.cvs0.bytecode.member.ProgramMethod;
 import net.cvs0.bytecode.attribute.Attribute;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.ClassNode;
 
 import java.util.Arrays;
 
@@ -60,6 +62,22 @@ class ProgramClassTest {
         assertNull(field.getOwner());
     }
     
+    @Test
+    void addAndRemoveFieldSyncsBackingClassNode() {
+        ClassNode cn = new ClassNode();
+        cn.name = "a/B";
+        cn.version = Opcodes.V17;
+        cn.superName = "java/lang/Object";
+        ProgramClass pc = new ProgramClass(cn);
+        ProgramField f = new ProgramField("x", "I", Opcodes.ACC_PUBLIC);
+        pc.addField(f);
+        assertNotNull(cn.fields);
+        assertEquals(1, cn.fields.size());
+        assertSame(f.getFieldNode(), cn.fields.get(0));
+        pc.removeField("x");
+        assertTrue(cn.fields.isEmpty());
+    }
+
     @Test
     void testRemoveMethod() {
         ProgramMethod method = new ProgramMethod("testMethod", "()V", 0x0001);

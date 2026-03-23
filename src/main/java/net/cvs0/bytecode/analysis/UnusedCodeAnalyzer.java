@@ -4,6 +4,7 @@ import net.cvs0.bytecode.JarMapping;
 import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.member.ProgramField;
 import net.cvs0.bytecode.member.ProgramMethod;
+import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 
 import java.util.*;
@@ -155,13 +156,12 @@ public class UnusedCodeAnalyzer {
 
         for (AbstractInsnNode insn : method.getMethodNode().instructions) {
             switch (insn.getOpcode()) {
-                case 153: case 154: case 155: case 156: case 157: case 158:
-                case 159: case 160: case 161: case 162: case 163: case 164:
-                case 165: case 166: case 167: case 168:
-                case 170: case 171:
-                case 198: case 199:
-                    complexity++;
-                    break;
+                case Opcodes.IFEQ, Opcodes.IFNE, Opcodes.IFLT, Opcodes.IFGE, Opcodes.IFGT, Opcodes.IFLE,
+                        Opcodes.IF_ICMPEQ, Opcodes.IF_ICMPNE, Opcodes.IF_ICMPLT, Opcodes.IF_ICMPGE,
+                        Opcodes.IF_ICMPGT, Opcodes.IF_ICMPLE, Opcodes.IF_ACMPEQ, Opcodes.IF_ACMPNE,
+                        Opcodes.GOTO, Opcodes.JSR, Opcodes.IFNULL, Opcodes.IFNONNULL -> complexity++;
+                case Opcodes.TABLESWITCH, Opcodes.LOOKUPSWITCH -> complexity++;
+                default -> { }
             }
         }
 

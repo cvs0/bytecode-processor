@@ -23,7 +23,20 @@ class JarMappingTest {
     void setUp() {
         jarMapping = new JarMapping("test.jar");
     }
-    
+
+    @Test
+    void rejectsNullJarPath() {
+        assertThrows(NullPointerException.class, () -> new JarMapping(null));
+    }
+
+    @Test
+    void rejectsNullAddArguments() {
+        assertThrows(NullPointerException.class, () -> jarMapping.addClass(null));
+        assertThrows(NullPointerException.class, () -> jarMapping.addLibraryClass(null));
+        assertThrows(NullPointerException.class, () -> jarMapping.addResource(null, new byte[0]));
+        assertThrows(NullPointerException.class, () -> jarMapping.addResource("a", null));
+    }
+
     @Test
     void testAddAndGetProgramClass() {
         ProgramClass clazz = new ProgramClass("com/example/TestClass");

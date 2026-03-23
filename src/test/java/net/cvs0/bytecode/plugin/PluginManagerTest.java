@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -83,14 +85,48 @@ class PluginManagerTest {
         
         assertTrue(testPlugin.isInitialized());
     }
+
+    @Test
+    void testProcessWithPluginsReturnsFalseWhenProcessThrows() {
+        Logger log = Logger.getLogger(PluginManager.class.getName());
+        Level saved = log.getLevel();
+        log.setLevel(Level.OFF);
+        try {
+            AbstractPlugin flaky = new AbstractPlugin("Flaky", "1", "x") {
+                @Override
+                public void process(JarMapping mapping) {
+                    throw new RuntimeException("process boom");
+                }
+            };
+            pluginManager.registerPlugin(flaky);
+            assertFalse(pluginManager.processWithPlugins(new JarMapping("x.jar")));
+        } finally {
+            log.setLevel(saved);
+        }
+    }
+
+    @Test
+    void testInitializePluginsFailsWhenPluginThrows() {
+        AbstractPlugin bad = new AbstractPlugin("Bad", "1", "x") {
+            @Override
+            public void process(JarMapping mapping) { }
+
+            @Override
+            public void initialize() {
+                throw new RuntimeException("boom");
+            }
+        };
+        pluginManager.registerPlugin(bad);
+        assertThrows(IllegalStateException.class, () -> pluginManager.initializePlugins());
+    }
     
     @Test
     void testProcessWithPlugins() {
         pluginManager.registerPlugin(testPlugin);
         JarMapping mapping = new JarMapping("test.jar");
         
-        pluginManager.processWithPlugins(mapping);
-        
+        assertTrue(pluginManager.processWithPlugins(mapping));
+
         assertTrue(testPlugin.isInitialized());
         assertTrue(testPlugin.isProcessed());
     }

@@ -6,6 +6,7 @@ import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.member.ProgramMethod;
 import net.cvs0.bytecode.plugin.AbstractPlugin;
 import net.cvs0.bytecode.transform.InstructionTransformer;
+import net.cvs0.bytecode.util.BytecodeTraversal;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.InsnNode;
 
@@ -106,19 +107,17 @@ public class OptimizationPlugin extends AbstractPlugin {
      * @param optimizeConstants true to optimize constant loading
      */
     private void optimizeInstructions(JarMapping mapping, boolean removeNops, boolean optimizeConstants) {
-        for (ProgramClass clazz : mapping.getProgramClasses()) {
-            for (ProgramMethod method : clazz.getMethods()) {
-                InstructionTransformer transformer = new InstructionTransformer(method);
+        BytecodeTraversal.forEachMethod(mapping, (clazz, method) -> {
+            InstructionTransformer transformer = new InstructionTransformer(method);
 
-                if (removeNops) {
-                    transformer.removeInstructions(insn -> insn.getOpcode() == 0);
-                }
-
-                if (optimizeConstants) {
-                    optimizeConstantLoading(transformer);
-                }
+            if (removeNops) {
+                transformer.removeInstructions(insn -> insn.getOpcode() == 0);
             }
-        }
+
+            if (optimizeConstants) {
+                optimizeConstantLoading(transformer);
+            }
+        });
     }
 
     /**

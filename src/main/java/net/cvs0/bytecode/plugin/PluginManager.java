@@ -1,14 +1,26 @@
 package net.cvs0.bytecode.plugin;
 
 import net.cvs0.bytecode.JarMapping;
-import java.util.*;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Manages the registration, initialization, and execution of plugins for bytecode processing.
  * Supports plugin lifecycle management, prioritization, and safe concurrent access.
  */
 public class PluginManager {
+
+    private static final Logger LOG = Logger.getLogger(PluginManager.class.getName());
+
     /** Map of plugin names to Plugin instances. */
     private final Map<String, Plugin> plugins = new ConcurrentHashMap<>();
     /** List of plugins sorted by priority. */
@@ -49,7 +61,7 @@ public class PluginManager {
             try {
                 removed.cleanup();
             } catch (Exception e) {
-                System.err.println("Error cleaning up plugin '" + name + "': " + e.getMessage());
+                LOG.log(Level.WARNING, "Cleanup failed for plugin '" + name + "'", e);
                 throw new RuntimeException("Failed to cleanup plugin '" + name + "'", e);
             }
             updateSortedPlugins();
@@ -90,36 +102,53 @@ public class PluginManager {
         if (initialized) {
             return;
         }
-        
+
+        List<Exception> failures = new ArrayList<>();
         for (Plugin plugin : sortedPlugins) {
-            if (plugin.isEnabled()) {
-                try {
-                    plugin.initialize();
-                } catch (Exception e) {
-                    System.err.println("Error initializing plugin '" + plugin.getName() + "': " + e.getMessage());
-                }
+            if (!plugin.isEnabled()) {
+                continue;
+            }
+            try {
+                plugin.initialize();
+            } catch (Exception e) {
+                failures.add(new IllegalStateException("Plugin '" + plugin.getName() + "' failed to initialize", e));
             }
         }
-        
+        if (!failures.isEmpty()) {
+            IllegalStateException aggregate = new IllegalStateException(
+                    "Failed to initialize " + failures.size() + " plugin(s)");
+            for (Exception f : failures) {
+                aggregate.addSuppressed(f);
+            }
+            throw aggregate;
+        }
+
         initialized = true;
     }
     
     /**
      * Processes the given JarMapping with all enabled plugins.
+     * Failures are logged at {@link Level#WARNING} with stack traces; processing continues with remaining plugins.
+     *
      * @param mapping the JarMapping to process
+     * @return {@code true} if every enabled plugin completed without throwing
      */
-    public void processWithPlugins(JarMapping mapping) {
+    public boolean processWithPlugins(JarMapping mapping) {
+        Objects.requireNonNull(mapping, "mapping");
         if (!initialized) {
             initializePlugins();
         }
-        
+
+        boolean allOk = true;
         for (Plugin plugin : getEnabledPlugins()) {
             try {
                 plugin.process(mapping);
             } catch (Exception e) {
-                System.err.println("Error processing with plugin '" + plugin.getName() + "': " + e.getMessage());
+                allOk = false;
+                LOG.log(Level.WARNING, "Plugin '" + plugin.getName() + "' failed during process", e);
             }
         }
+        return allOk;
     }
     
     /**
@@ -130,7 +159,7 @@ public class PluginManager {
             try {
                 plugin.cleanup();
             } catch (Exception e) {
-                System.err.println("Error cleaning up plugin '" + plugin.getName() + "': " + e.getMessage());
+                LOG.log(Level.WARNING, "Cleanup failed for plugin '" + plugin.getName() + "'", e);
             }
         }
         initialized = false;
