@@ -3,14 +3,10 @@ package net.cvs0.bytecode.member;
 import net.cvs0.bytecode.attribute.*;
 import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.instruction.Instruction;
-import net.cvs0.bytecode.member.LineNumber;
-import net.cvs0.bytecode.member.LocalVariable;
-import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.LineNumberNode;
 
 import java.util.*;
 
@@ -26,14 +22,14 @@ public class ProgramMethod {
     private String[] exceptions;
     private int maxStack;
     private int maxLocals;
-    
+
     private ProgramClass owner;
     private final List<Attribute> attributes = new ArrayList<>();
     private final List<Instruction> instructions = new ArrayList<>();
     private final List<LocalVariable> localVariables = new ArrayList<>();
     private final List<LineNumber> lineNumbers = new ArrayList<>();
     private MethodNode methodNode;
-    
+
     /**
      * Constructs a ProgramMethod with the given name, descriptor, and access flags.
      * @param name the method name
@@ -56,8 +52,9 @@ public class ProgramMethod {
         this.descriptor = methodNode.desc;
         this.signature = methodNode.signature;
         this.access = methodNode.access;
-        this.exceptions = methodNode.exceptions != null ? 
-            methodNode.exceptions.toArray(new String[0]) : new String[0];
+        this.exceptions = methodNode.exceptions != null
+                ? methodNode.exceptions.toArray(new String[0])
+                : new String[0];
         this.maxStack = methodNode.maxStack;
         this.maxLocals = methodNode.maxLocals;
 
@@ -68,20 +65,7 @@ public class ProgramMethod {
         }
 
         extractAttributesFromMethodNode(methodNode);
-        if (methodNode.instructions != null && methodNode.instructions.size() > 0) {
-            List<LineNumberNode> lineNumberNodes = new ArrayList<>();
-            for (AbstractInsnNode insn : methodNode.instructions) {
-                if (insn instanceof LineNumberNode lnn) {
-                    lineNumberNodes.add(lnn);
-                }
-            }
-            if (!lineNumberNodes.isEmpty()) {
-                var lineNumberTableAttr = AttributeFactory.createLineNumberTable(lineNumberNodes, methodNode);
-                addAttribute(lineNumberTableAttr);
-                lineNumbers.clear();
-                lineNumbers.addAll(lineNumberTableAttr.getLineNumbers());
-            }
-        }
+        syncCachedListsFromAttributes();
     }
 
     /**
@@ -146,12 +130,11 @@ public class ProgramMethod {
         }
         instructions.add(index, instruction);
         if (methodNode != null && methodNode.instructions != null) {
-            if (index == methodNode.instructions.size()) {
-                methodNode.instructions.add(instruction.getInstructionNode());
+            InsnList il = methodNode.instructions;
+            if (index == il.size()) {
+                il.add(instruction.getInstructionNode());
             } else {
-                methodNode.instructions.insert(
-                        methodNode.instructions.get(index),
-                        instruction.getInstructionNode());
+                il.insert(il.get(index), instruction.getInstructionNode());
             }
         }
     }
@@ -316,7 +299,11 @@ public class ProgramMethod {
     public void setExceptions(String[] exceptions) {
         this.exceptions = exceptions != null ? exceptions.clone() : new String[0];
         if (methodNode != null) {
-            methodNode.exceptions = exceptions != null ? Arrays.asList(exceptions) : new ArrayList<>();
+            if (exceptions != null && exceptions.length > 0) {
+                methodNode.exceptions = new ArrayList<>(Arrays.asList(exceptions));
+            } else {
+                methodNode.exceptions = null;
+            }
         }
     }
 
@@ -395,7 +382,7 @@ public class ProgramMethod {
      * @return true if static
      */
     public boolean isStatic() {
-        return (access & 0x0008) != 0;
+        return (access & Opcodes.ACC_STATIC) != 0;
     }
 
     /**
@@ -403,7 +390,7 @@ public class ProgramMethod {
      * @return true if final
      */
     public boolean isFinal() {
-        return (access & 0x0010) != 0;
+        return (access & Opcodes.ACC_FINAL) != 0;
     }
 
     /**
@@ -411,7 +398,7 @@ public class ProgramMethod {
      * @return true if public
      */
     public boolean isPublic() {
-        return (access & 0x0001) != 0;
+        return (access & Opcodes.ACC_PUBLIC) != 0;
     }
 
     /**
@@ -419,7 +406,7 @@ public class ProgramMethod {
      * @return true if private
      */
     public boolean isPrivate() {
-        return (access & 0x0002) != 0;
+        return (access & Opcodes.ACC_PRIVATE) != 0;
     }
 
     /**
@@ -427,7 +414,7 @@ public class ProgramMethod {
      * @return true if protected
      */
     public boolean isProtected() {
-        return (access & 0x0004) != 0;
+        return (access & Opcodes.ACC_PROTECTED) != 0;
     }
 
     /**
@@ -435,7 +422,7 @@ public class ProgramMethod {
      * @return true if abstract
      */
     public boolean isAbstract() {
-        return (access & 0x0400) != 0;
+        return (access & Opcodes.ACC_ABSTRACT) != 0;
     }
 
     /**
@@ -443,7 +430,7 @@ public class ProgramMethod {
      * @return true if synchronized
      */
     public boolean isSynchronized() {
-        return (access & 0x0020) != 0;
+        return (access & Opcodes.ACC_SYNCHRONIZED) != 0;
     }
 
     /**
@@ -451,7 +438,7 @@ public class ProgramMethod {
      * @return true if native
      */
     public boolean isNative() {
-        return (access & 0x0100) != 0;
+        return (access & Opcodes.ACC_NATIVE) != 0;
     }
 
     /**
@@ -459,7 +446,7 @@ public class ProgramMethod {
      * @return true if synthetic
      */
     public boolean isSynthetic() {
-        return (access & 0x1000) != 0;
+        return (access & Opcodes.ACC_SYNTHETIC) != 0;
     }
 
     /**
@@ -503,61 +490,77 @@ public class ProgramMethod {
     }
 
     /**
+     * Fills {@link #lineNumbers} and {@link #localVariables} from the {@link CodeAttribute} (nested tables) or, when there is no code body, from a top-level {@link LocalVariableTableAttribute}.
+     */
+    private void syncCachedListsFromAttributes() {
+        lineNumbers.clear();
+        localVariables.clear();
+        CodeAttribute code = firstAttribute(CodeAttribute.class);
+        if (code != null) {
+            for (Attribute nested : code.getCodeAttributes()) {
+                if (nested instanceof LineNumberTableAttribute lnt) {
+                    lineNumbers.addAll(lnt.getLineNumbers());
+                } else if (nested instanceof LocalVariableTableAttribute lvt) {
+                    localVariables.addAll(lvt.getLocalVariables());
+                }
+            }
+            return;
+        }
+        LocalVariableTableAttribute topLvt = firstAttribute(LocalVariableTableAttribute.class);
+        if (topLvt != null) {
+            localVariables.addAll(topLvt.getLocalVariables());
+        }
+    }
+
+    /**
      * Extracts attributes from the ASM MethodNode and adds them to this method.
      * @param methodNode the ASM MethodNode
      */
     private void extractAttributesFromMethodNode(MethodNode methodNode) {
-        if (methodNode == null) return;
+        if (methodNode == null) {
+            return;
+        }
         if (methodNode.signature != null) {
             addAttribute(AttributeFactory.createSignatureAttribute(methodNode.signature));
         }
         if (methodNode.exceptions != null && !methodNode.exceptions.isEmpty()) {
             addAttribute(AttributeFactory.createExceptionsAttribute(methodNode.exceptions));
         }
-        if (methodNode.instructions != null && methodNode.instructions.size() > 0) {
+
+        boolean hasCode = methodNode.instructions != null && methodNode.instructions.size() > 0;
+        if (hasCode) {
             CodeAttribute codeAttribute = AttributeFactory.createCodeAttribute(methodNode);
             if (codeAttribute != null) {
                 addAttribute(codeAttribute);
             }
-        }
-        if (methodNode.localVariables != null && !methodNode.localVariables.isEmpty()) {
-            LocalVariableTableAttribute lvtAttribute = AttributeFactory.createLocalVariableTable(methodNode.localVariables, methodNode);
+        } else if (methodNode.localVariables != null && !methodNode.localVariables.isEmpty()) {
+            LocalVariableTableAttribute lvtAttribute =
+                    AttributeFactory.createLocalVariableTable(methodNode.localVariables, methodNode);
             addAttribute(lvtAttribute);
-            for (var lvNode : methodNode.localVariables) {
-                LocalVariable localVar = new LocalVariable(
-                    lvNode.name,
-                    lvNode.desc,
-                    lvNode.signature,
-                    0,
-                    0,
-                    lvNode.index
-                );
-                addLocalVariable(localVar);
-            }
         }
-        if ((methodNode.access & 0x1000) != 0) {
+
+        if ((methodNode.access & Opcodes.ACC_SYNTHETIC) != 0) {
             addAttribute(AttributeFactory.createSyntheticAttribute());
         }
-        if (methodNode.visibleAnnotations != null || methodNode.invisibleAnnotations != null) {
-            if (methodNode.visibleAnnotations != null) {
-                AnnotationAttribute visibleAnnotations = new AnnotationAttribute("RuntimeVisibleAnnotations", true);
-                addAttribute(visibleAnnotations);
-            }
-            if (methodNode.invisibleAnnotations != null) {
-                AnnotationAttribute invisibleAnnotations = new AnnotationAttribute("RuntimeInvisibleAnnotations", false);
-                addAttribute(invisibleAnnotations);
-            }
-        }
+
         if (methodNode.parameters != null && !methodNode.parameters.isEmpty()) {
             MethodParametersAttribute methodParamsAttribute = AttributeFactory.createMethodParametersAttribute();
             for (var param : methodNode.parameters) {
-                MethodParametersAttribute.Parameter parameter = new MethodParametersAttribute.Parameter(
-                    param.name, param.access
-                );
+                MethodParametersAttribute.Parameter parameter =
+                        new MethodParametersAttribute.Parameter(param.name, param.access);
                 methodParamsAttribute.addParameter(parameter);
             }
             addAttribute(methodParamsAttribute);
         }
+    }
+
+    private <T extends Attribute> T firstAttribute(Class<T> type) {
+        for (Attribute attr : attributes) {
+            if (type.isInstance(attr)) {
+                return type.cast(attr);
+            }
+        }
+        return null;
     }
 
     /**
@@ -565,23 +568,28 @@ public class ProgramMethod {
      * @return the CodeAttribute or null
      */
     public CodeAttribute getCodeAttribute() {
-        return attributes.stream()
-                .filter(attr -> attr instanceof CodeAttribute)
-                .map(attr -> (CodeAttribute) attr)
-                .findFirst()
-                .orElse(null);
+        return firstAttribute(CodeAttribute.class);
     }
 
     /**
      * Gets the LocalVariableTableAttribute for this method, or null if not present.
+     * Prefers a top-level table; otherwise the one nested under {@link CodeAttribute} (the usual JVM layout).
      * @return the LocalVariableTableAttribute or null
      */
     public LocalVariableTableAttribute getLocalVariableTableAttribute() {
-        return attributes.stream()
-                .filter(attr -> attr instanceof LocalVariableTableAttribute)
-                .map(attr -> (LocalVariableTableAttribute) attr)
-                .findFirst()
-                .orElse(null);
+        LocalVariableTableAttribute top = firstAttribute(LocalVariableTableAttribute.class);
+        if (top != null) {
+            return top;
+        }
+        CodeAttribute code = firstAttribute(CodeAttribute.class);
+        if (code != null) {
+            for (Attribute nested : code.getCodeAttributes()) {
+                if (nested instanceof LocalVariableTableAttribute lvt) {
+                    return lvt;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -589,11 +597,7 @@ public class ProgramMethod {
      * @return the ExceptionsAttribute or null
      */
     public ExceptionsAttribute getExceptionsAttribute() {
-        return attributes.stream()
-                .filter(attr -> attr instanceof ExceptionsAttribute)
-                .map(attr -> (ExceptionsAttribute) attr)
-                .findFirst()
-                .orElse(null);
+        return firstAttribute(ExceptionsAttribute.class);
     }
 
     /**
@@ -601,11 +605,7 @@ public class ProgramMethod {
      * @return the SignatureAttribute or null
      */
     public SignatureAttribute getSignatureAttribute() {
-        return attributes.stream()
-                .filter(attr -> attr instanceof SignatureAttribute)
-                .map(attr -> (SignatureAttribute) attr)
-                .findFirst()
-                .orElse(null);
+        return firstAttribute(SignatureAttribute.class);
     }
 
     /**
@@ -613,11 +613,7 @@ public class ProgramMethod {
      * @return the MethodParametersAttribute or null
      */
     public MethodParametersAttribute getMethodParametersAttribute() {
-        return attributes.stream()
-                .filter(attr -> attr instanceof MethodParametersAttribute)
-                .map(attr -> (MethodParametersAttribute) attr)
-                .findFirst()
-                .orElse(null);
+        return firstAttribute(MethodParametersAttribute.class);
     }
 
     /**
