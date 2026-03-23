@@ -24,7 +24,7 @@ A Java bytecode analysis and transformation library built on ASM (tree API). It 
 ### Build from source
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/cvs0/bytecode-processor.git
 cd bytecode-processor
 mvn clean verify
 ```
@@ -219,16 +219,10 @@ Coverage report: `target/site/jacoco/index.html` after `verify`.
 <repositories>
     <repository>
         <id>github</id>
-        <url>https://maven.pkg.github.com/OWNER/REPO</url>
+        <url>https://maven.pkg.github.com/cvs0/bytecode-processor</url>
     </repository>
 </repositories>
 ```
-
-Replace `OWNER/REPO` with your GitHub namespace and repository name. In `~/.m2/settings.xml`, add a `server` with `id` `github` and a Personal Access Token with `read:packages` as the password (see [GitHub docs](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry#authenticating-to-github-packages)).
-
-Publishing to **Maven Central** (Sonatype) is not configured here; that needs OSSRH credentials, GPG signing, and extra `pom.xml` metadata. The release job can be extended later with a profile or separate workflow if you add a Central publishing setup.
-
----
 
 ## Architecture
 
