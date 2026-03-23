@@ -6,12 +6,6 @@ package net.cvs0.bytecode.util;
  */
 public final class ObjectUtils {
     /**
-     * Private constructor to prevent instantiation.
-     */
-    private ObjectUtils() {
-        // Utility class - prevent instantiation
-    }
-    /**
      * Checks if two objects are equal using null-safe comparison.
      * @param a first object
      * @param b second object
@@ -20,6 +14,7 @@ public final class ObjectUtils {
     public static boolean equals(Object a, Object b) {
         return a == b || (a != null && a.equals(b));
     }
+
     /**
      * Generates a hash code for an object using null-safe approach.
      * @param obj object to hash
@@ -28,6 +23,7 @@ public final class ObjectUtils {
     public static int hashCode(Object obj) {
         return obj != null ? obj.hashCode() : 0;
     }
+
     /**
      * Generates a combined hash code for multiple objects.
      * @param objects objects to combine

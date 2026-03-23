@@ -141,12 +141,18 @@ public class ProgramMethod {
      * @param instruction the Instruction to insert
      */
     public void insertInstruction(int index, Instruction instruction) {
+        if (index < 0 || index > instructions.size()) {
+            throw new IndexOutOfBoundsException("index " + index + ", size " + instructions.size());
+        }
         instructions.add(index, instruction);
         if (methodNode != null && methodNode.instructions != null) {
-            methodNode.instructions.insert(
-                methodNode.instructions.get(index), 
-                instruction.getInstructionNode()
-            );
+            if (index == methodNode.instructions.size()) {
+                methodNode.instructions.add(instruction.getInstructionNode());
+            } else {
+                methodNode.instructions.insert(
+                        methodNode.instructions.get(index),
+                        instruction.getInstructionNode());
+            }
         }
     }
 

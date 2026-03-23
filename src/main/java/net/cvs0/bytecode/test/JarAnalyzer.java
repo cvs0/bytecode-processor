@@ -2,11 +2,11 @@ package net.cvs0.bytecode.test;
 
 import net.cvs0.bytecode.JarMapping;
 import net.cvs0.bytecode.analysis.DependencyAnalyzer;
+import net.cvs0.bytecode.analysis.JarStatistics;
 import net.cvs0.bytecode.clazz.ProgramClass;
-import net.cvs0.bytecode.member.ProgramMethod;
-
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -37,14 +37,17 @@ public class JarAnalyzer {
         System.out.println();
         
         try {
-            analyzeJar(jarPath);
+            analyzeJar(Path.of(jarPath));
         } catch (Exception e) {
             System.err.println("Error analyzing JAR: " + e.getMessage());
             e.printStackTrace();
         }
     }
     
-    private static void analyzeJar(String jarPath) {
+    /**
+     * Runs the full console report for a JAR (used by {@link net.cvs0.bytecode.cli.BytecodeCli}).
+     */
+    public static void analyzeJar(Path jarPath) {
         long startTime = System.currentTimeMillis();
         // Load the JAR
         System.out.println("📦 Loading JAR file...");
@@ -77,34 +80,19 @@ public class JarAnalyzer {
     private static void printBasicStatistics(JarMapping mapping) {
         System.out.println("📊 BASIC STATISTICS");
         System.out.println("-".repeat(40));
-        
-        Collection<ProgramClass> classes = mapping.getProgramClasses();
-        
-        int totalClasses = classes.size();
-        int interfaces = 0;
-        int abstractClasses = 0;
-        int finalClasses = 0;
-        int publicClasses = 0;
-        int totalMethods = 0;
-        int totalFields = 0;
-        
-        for (ProgramClass clazz : classes) {
-            if (clazz.isInterface()) interfaces++;
-            if (clazz.isAbstract()) abstractClasses++;
-            if (clazz.isFinal()) finalClasses++;
-            if (clazz.isPublic()) publicClasses++;
-            
-            totalMethods += clazz.getMethods().size();
-            totalFields += clazz.getFields().size();
+
+        JarStatistics s = JarStatistics.from(mapping);
+        System.out.println("Total Classes: " + s.getProgramClassCount());
+        System.out.println("  - Interfaces: " + s.getInterfaceCount());
+        System.out.println("  - Abstract: " + s.getAbstractClassCount());
+        System.out.println("  - Final: " + s.getFinalClassCount());
+        System.out.println("  - Public: " + s.getPublicClassCount());
+        System.out.println("Total Methods: " + s.getTotalMethods());
+        System.out.println("Total Fields: " + s.getTotalFields());
+        if (s.getLibraryClassCount() > 0 || s.getResourceCount() > 0) {
+            System.out.println("Library classes: " + s.getLibraryClassCount());
+            System.out.println("Resources: " + s.getResourceCount());
         }
-        
-        System.out.println("Total Classes: " + totalClasses);
-        System.out.println("  - Interfaces: " + interfaces);
-        System.out.println("  - Abstract: " + abstractClasses);
-        System.out.println("  - Final: " + finalClasses);
-        System.out.println("  - Public: " + publicClasses);
-        System.out.println("Total Methods: " + totalMethods);
-        System.out.println("Total Fields: " + totalFields);
         System.out.println();
     }
     

@@ -7,6 +7,7 @@ import net.cvs0.bytecode.util.JarWriter;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -14,6 +15,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * Represents a mapping of classes and resources within a JAR file.
  * Provides methods to add, remove, and retrieve program and library classes, as well as resources.
  * Supports reading from and writing to JAR files.
+ *
+ * <p>Program and library class maps are backed by {@link java.util.concurrent.ConcurrentHashMap}; individual
+ * {@link ProgramClass} instances are not thread-safe unless documented otherwise.
  */
 public class JarMapping {
     /** Map of program class names to their ProgramClass representations. */
@@ -30,7 +34,7 @@ public class JarMapping {
      * @param jarPath the path to the JAR file
      */
     public JarMapping(String jarPath) {
-        this.jarPath = jarPath;
+        this.jarPath = Objects.requireNonNull(jarPath, "jarPath");
     }
     
     /**
@@ -40,8 +44,24 @@ public class JarMapping {
      * @throws IOException if the JAR cannot be read
      */
     public static JarMapping fromJar(String jarPath) throws IOException {
+        Objects.requireNonNull(jarPath, "jarPath");
         JarMapping mapping = new JarMapping(jarPath);
         JarReader.read(new File(jarPath), mapping);
+        return mapping;
+    }
+
+    /**
+     * Loads a JarMapping from a JAR file path.
+     *
+     * @param jarPath path to the JAR
+     * @return a new JarMapping instance
+     * @throws IOException if the JAR cannot be read
+     */
+    public static JarMapping fromJar(Path jarPath) throws IOException {
+        Objects.requireNonNull(jarPath, "jarPath");
+        Path normalized = jarPath.toAbsolutePath().normalize();
+        JarMapping mapping = new JarMapping(normalized.toString());
+        JarReader.read(normalized.toFile(), mapping);
         return mapping;
     }
     
@@ -50,6 +70,7 @@ public class JarMapping {
      * @param clazz the ProgramClass to add
      */
     public void addClass(ProgramClass clazz) {
+        Objects.requireNonNull(clazz, "clazz");
         programClasses.put(clazz.getName(), clazz);
     }
     
@@ -58,6 +79,7 @@ public class JarMapping {
      * @param clazz the LibraryClass to add
      */
     public void addLibraryClass(LibraryClass clazz) {
+        Objects.requireNonNull(clazz, "clazz");
         libraryClasses.put(clazz.getName(), clazz);
     }
     
@@ -67,6 +89,8 @@ public class JarMapping {
      * @param data the resource data
      */
     public void addResource(String name, byte[] data) {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(data, "data");
         resources.put(name, data);
     }
     
@@ -144,6 +168,8 @@ public class JarMapping {
      * @param newName the new class name
      */
     public void renameClass(String oldName, String newName) {
+        Objects.requireNonNull(oldName, "oldName");
+        Objects.requireNonNull(newName, "newName");
         ProgramClass programClass = programClasses.remove(oldName);
         if (programClass != null) {
             programClass.setName(newName);
@@ -163,7 +189,19 @@ public class JarMapping {
      * @throws IOException if writing fails
      */
     public void writeToJar(String outputPath) throws IOException {
+        Objects.requireNonNull(outputPath, "outputPath");
         JarWriter.write(this, new File(outputPath));
+    }
+
+    /**
+     * Writes this mapping to a JAR at the given path.
+     *
+     * @param outputPath destination path
+     * @throws IOException if writing fails
+     */
+    public void writeToJar(Path outputPath) throws IOException {
+        Objects.requireNonNull(outputPath, "outputPath");
+        JarWriter.write(this, outputPath);
     }
     
     /**

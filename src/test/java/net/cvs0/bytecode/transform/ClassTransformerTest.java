@@ -6,6 +6,9 @@ import net.cvs0.bytecode.member.ProgramField;
 import net.cvs0.bytecode.member.ProgramMethod;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -31,6 +34,21 @@ class ClassTransformerTest {
         assertNull(jarMapping.getProgramClass("com/example/TestClass"));
         assertNotNull(jarMapping.getProgramClass("com/example/NewTestClass"));
         assertEquals("com/example/NewTestClass", jarMapping.getProgramClass("com/example/NewTestClass").getName());
+    }
+
+    @Test
+    void testRenameClassUpdatesFieldInsnDescriptor() {
+        MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, "run", "()V", null, null);
+        mn.instructions.add(new FieldInsnNode(Opcodes.GETFIELD, "com/example/Other", "x", "Lcom/example/Other;"));
+        testClass.addMethod(new ProgramMethod(mn));
+
+        transformer.renameClass("com/example/Other", "com/example/RenOther");
+        transformer.applyTransformations();
+
+        ProgramMethod run = testClass.getMethod("run", "()V");
+        FieldInsnNode fin = (FieldInsnNode) run.getMethodNode().instructions.getFirst();
+        assertEquals("com/example/RenOther", fin.owner);
+        assertEquals("Lcom/example/RenOther;", fin.desc);
     }
     
     @Test

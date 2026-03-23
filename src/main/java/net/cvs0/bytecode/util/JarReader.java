@@ -5,9 +5,6 @@ import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.member.ProgramField;
 import net.cvs0.bytecode.member.ProgramMethod;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -112,20 +109,7 @@ public class JarReader {
             ClassNode classNode = new ClassNode();
             classReader.accept(classNode, 0);
             if (classNode.name == null || classNode.name.isEmpty()) {
-                System.err.println("[DEBUG] Skipping class with null/empty name: " + entry.getName());
                 return;
-            }
-            System.out.println("[DEBUG] Loaded class: " + classNode.name + " from entry: " + entry.getName());
-            try {
-                ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-                classNode.accept(cw);
-            } catch (Throwable t) {
-                System.err.println("[DEBUG] ClassWriter failed to compute labels for " + classNode.name + " - falling back to per-method accept: " + t);
-                if (classNode.methods != null) {
-                    for (MethodNode methodNode : classNode.methods) {
-                        methodNode.accept(new MethodVisitor(Opcodes.ASM9) {});
-                    }
-                }
             }
 
             ProgramClass programClass = new ProgramClass(classNode);
@@ -163,8 +147,7 @@ public class JarReader {
             }
             mapping.addClass(programClass);
         } catch (Exception e) {
-            System.err.println("[DEBUG] Error processing class entry: " + entry.getName() + " - " + e);
-            e.printStackTrace();
+            throw new IOException("Failed to load class entry: " + entry.getName(), e);
         }
     }
 
