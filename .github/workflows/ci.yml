@@ -2,9 +2,19 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
+      - develop
+      - "release/**"
+      - "v*"
   pull_request:
-    branches: [main, master]
+    branches:
+      - main
+      - master
+      - develop
+      - "release/**"
+      - "v*"
 
 jobs:
   verify:
