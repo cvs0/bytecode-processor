@@ -210,7 +210,7 @@ Coverage report: `target/site/jacoco/index.html` after `verify`.
 
 ### CI and releases
 
-- **GitHub Actions**: on pushes and pull requests targeting `main` or `master`, [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `mvn -B verify` (build and test only; **no** Maven publish).
+- **GitHub Actions**: on pushes and pull requests targeting **`main`**, **`master`**, **`develop`**, **`release/**`**, or version lines **`v*`** (e.g. `v1.1`), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `mvn -B verify` (build and test only; **no** Maven publish).
 - **Releases**: after updating `<version>` in `pom.xml`, create and push a tag (e.g. `git tag -a v1.2.0 -m "1.2.0"` then `git push origin v1.2.0`). [`.github/workflows/release.yml`](.github/workflows/release.yml) runs **`mvn verify deploy`**, publishes **`net.cvs0:bytecode-processor`** (main JAR, POM, and the **`all`** shaded classifier) to [**GitHub Packages**](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry), and uploads both JARs to a GitHub Release for that tag.
 
 **Consume the artifact from GitHub Packages** (Maven requires authentication to this registry even for public repos):
@@ -223,6 +223,65 @@ Coverage report: `target/site/jacoco/index.html` after `verify`.
     </repository>
 </repositories>
 ```
+
+---
+
+## Contributing
+
+### Branch layout
+
+| Branch pattern | Purpose |
+|----------------|---------|
+| **`main`** | Default branch. Production-ready code; `<version>` in `pom.xml` matches what you intend to ship next. Merge only via pull request (reviews, CI green). |
+| **`develop`** | Optional integration line. Use when you want a staging area: merge features here first, then merge `develop` → `main` at release time. If you prefer **trunk-based** development, you can omit `develop` and target **`main`** only. |
+| **`release/x.y.z`** | Short-lived stabilization (e.g. `release/1.2.0`). Branch from `main` or `develop` when the version is frozen; only bugfixes and release prep; merge back to `main` (and `develop` if used), then tag. |
+| **`v1.x`** (example: `v1.1`) | **Maintenance** for an already-shipped major/minor line. Patch releases (`1.1.1`, `1.1.2`) happen here; cherry-pick or merge fixes from `main` as appropriate, bump patch version, tag `v1.1.1`, etc. |
+| **`feature/…`** | New work. Branch from `main` (or `develop` if you use it). Name briefly: `feature/deps-dot-export`, `fix/jar-writer-manifest`. |
+| **`hotfix/…`** | Urgent production fix. Branch from `main` (or from the active **`v*.*`** line if the hotfix is for that line only). |
+
+**Tags** (`v1.2.0`, …) mark immutable releases and drive [`.github/workflows/release.yml`](.github/workflows/release.yml) (GitHub Release + Packages). Do not rewrite published tags.
+
+### Quick setup (maintainer)
+
+Create the integration branch once and publish it:
+
+```bash
+git fetch origin
+git checkout main
+git pull origin main
+git branch develop main          # skip if you do not want develop
+git push -u origin develop       # skip if you skipped develop
+```
+
+Create a maintenance line after a major/minor release (example: supporting `1.1.x` while `main` moves to `1.2`):
+
+```bash
+git checkout -b v1.1 main       # or the tag you released from
+git push -u origin v1.1
+```
+
+Start a feature:
+
+```bash
+git checkout main && git pull
+git checkout -b feature/my-change
+# … commit …
+git push -u origin feature/my-change
+```
+
+Then open a **pull request** on GitHub into `main` (or `develop`).
+
+### Pull request checklist
+
+- `mvn verify` passes locally (or rely on CI).
+- For user-visible behavior, update **README** or CLI help if needed.
+- Keep commits focused; follow existing style (see [`.editorconfig`](.editorconfig)).
+
+### Versioning and `pom.xml`
+
+- **On `main`**: set `<version>` to the next release you plan to tag (e.g. `1.2.0-SNAPSHOT` during development or `1.2.0` right before release, per your preference).
+- **On `v1.1`**: keep `<version>` as `1.1.x` / `1.1.x-SNAPSHOT` for that line only.
+- Align the Git tag with the published Maven version (e.g. tag `v1.2.0` when `pom.xml` says `1.2.0`).
 
 ## Architecture
 
