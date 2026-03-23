@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# Runs before each commit when core.hooksPath points at .githooks (see README).
+set -e
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+echo "pre-commit: mvn test"
+mvn -B test
