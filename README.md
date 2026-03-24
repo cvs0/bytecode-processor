@@ -55,7 +55,19 @@ On Unix, ensure the hook is executable: `chmod +x .githooks/pre-commit`.
 
 ### Use as a Maven dependency
 
-Via [JitPack](https://jitpack.io/#cvs0/bytecode-processor) (use a Git **tag** such as `v1.2.0`, a **branch**, or a **commit** as `<version>`):
+**Maven Central** (recommended):
+
+```xml
+<dependency>
+    <groupId>io.github.cvs0</groupId>
+    <artifactId>bytecode-processor</artifactId>
+    <version>1.2.0</version>
+</dependency>
+```
+
+No extra repository configuration needed — Maven Central is the default.
+
+**Alternatively via [JitPack](https://jitpack.io/#cvs0/bytecode-processor)** (use a Git **tag** such as `v1.2.0`, a **branch**, or a **commit** as `<version>`):
 
 ```xml
 <repositories>
@@ -65,13 +77,13 @@ Via [JitPack](https://jitpack.io/#cvs0/bytecode-processor) (use a Git **tag** su
     </repository>
 </repositories>
 <dependency>
-    <groupId>net.cvs0</groupId>
+    <groupId>com.github.cvs0</groupId>
     <artifactId>bytecode-processor</artifactId>
     <version>v1.2.0</version>
 </dependency>
 ```
 
-Replace the version with a **Git tag** (e.g. `v1.2.0`), **branch name**, or **commit hash** — [JitPack](https://jitpack.io) builds this repo on demand. Add the JitPack repository and use coordinates from your `pom.xml` (`net.cvs0:bytecode-processor`). For the shaded CLI artifact, use classifier `all`. See [CI and releases](#ci-and-releases). For a local `mvn install` build, no extra repository is needed.
+For the shaded CLI artifact, use classifier `all`. See [CI and releases](#ci-and-releases). For a local `mvn install` build, no extra repository is needed.
 
 This project uses **Lombok** (`provided` scope) for generated accessors on a few types (e.g. `AbstractPlugin`, `InnerClass`). Install the [Lombok plugin](https://projectlombok.org/setup/) for your IDE so code navigation and completion stay accurate.
 
@@ -79,7 +91,7 @@ Your module (or automatic module) must **read** ASM tree and, if you use the CLI
 
 - `requires org.objectweb.asm.tree;`
 - `requires java.logging;`
-- `requires info.picocli;` (compile-time for `net.cvs0.bytecode.cli`, which is not exported)
+- `requires info.picocli;` (compile-time for `io.github.cvs0.bytecode.cli`, which is not exported)
 
 **Module path example** (application `module app { requires bytecode.processor; … }`):
 
@@ -97,8 +109,8 @@ java --module-path lib/bytecode-processor-1.2.0-SNAPSHOT.jar:lib/asm-tree-9.7.ja
 
 - **Module name**: `bytecode.processor`
 - **Exported packages** (public API):  
-  `net.cvs0.bytecode`, `net.cvs0.bytecode.attribute`, `net.cvs0.bytecode.member`, `net.cvs0.bytecode.analysis`, `net.cvs0.bytecode.util`, `net.cvs0.bytecode.clazz`, `net.cvs0.bytecode.instruction`, `net.cvs0.bytecode.plugin`, `net.cvs0.bytecode.test`, `net.cvs0.bytecode.transform`
-- **Non-exported**: `net.cvs0.bytecode.cli` is opened only to `info.picocli` for command metadata; embed the CLI by depending on this artifact and invoking `BytecodeCli`, or run the shaded JAR.
+  `io.github.cvs0.bytecode`, `io.github.cvs0.bytecode.attribute`, `io.github.cvs0.bytecode.member`, `io.github.cvs0.bytecode.analysis`, `io.github.cvs0.bytecode.util`, `io.github.cvs0.bytecode.clazz`, `io.github.cvs0.bytecode.instruction`, `io.github.cvs0.bytecode.plugin`, `io.github.cvs0.bytecode.test`, `io.github.cvs0.bytecode.transform`
+- **Non-exported**: `io.github.cvs0.bytecode.cli` is opened only to `info.picocli` for command metadata; embed the CLI by depending on this artifact and invoking `BytecodeCli`, or run the shaded JAR.
 
 ### Naming conventions
 
@@ -150,7 +162,7 @@ Use internal names consistent with the mapping at the time `applyTransformations
 - **`Plugin`**: `getName`, `getVersion`, `getDescription`, `initialize()`, `process(JarMapping)`, `cleanup()`, optional `isEnabled()`, `getPriority()` (higher runs first).
 - **`PluginManager`**: `registerPlugin`, `initializePlugins()` (throws `IllegalStateException` with **suppressed** causes if any plugin’s `initialize()` fails), `processWithPlugins(JarMapping)` returns `boolean` (`false` if any enabled plugin’s `process` threw); process/cleanup failures are **`java.util.logging` WARNING** with stack traces; processing continues with remaining plugins.
 
-Bundled examples: `OptimizationPlugin`, `ObfuscationPlugin` in `net.cvs0.bytecode.plugin.impl` (see [Example plugins](#example-plugins) under Contributing).
+Bundled examples: `OptimizationPlugin`, `ObfuscationPlugin` in `io.github.cvs0.bytecode.plugin.impl` (see [Example plugins](#example-plugins) under Contributing).
 
 ### Analysis and utilities
 
@@ -163,7 +175,7 @@ Bundled examples: `OptimizationPlugin`, `ObfuscationPlugin` in `net.cvs0.bytecod
 
 ## CLI documentation
 
-Entry point: **`net.cvs0.bytecode.cli.BytecodeCli`** (`main` in shaded JAR).
+Entry point: **`io.github.cvs0.bytecode.cli.BytecodeCli`** (`main` in shaded JAR).
 
 Global Picocli options (all commands): **`-h`**, **`--help`**, **`-V`**, **`--version`**.
 
@@ -235,7 +247,7 @@ Coverage report: `target/site/jacoco/index.html` after `verify`.
     </repository>
 </repositories>
 <dependency>
-    <groupId>net.cvs0</groupId>
+    <groupId>com.github.cvs0</groupId>
     <artifactId>bytecode-processor</artifactId>
     <version>v1.2.0</version>
 </dependency>
@@ -245,7 +257,7 @@ Shaded CLI (`-all` JAR) as a classified artifact:
 
 ```xml
 <dependency>
-    <groupId>net.cvs0</groupId>
+    <groupId>com.github.cvs0</groupId>
     <artifactId>bytecode-processor</artifactId>
     <version>v1.2.0</version>
     <classifier>all</classifier>
@@ -326,7 +338,7 @@ The project version is driven by the **`revision`** property and the [**flatten-
 
 ### Example plugins
 
-Reference implementations live under `net.cvs0.bytecode.plugin.impl`. They expose **configuration key constants** (e.g. `ObfuscationPlugin.CFG_NAME_PREFIX`, `OptimizationPlugin.CFG_REMOVE_NOPS`) and Javadoc tables describing each flag. Prefer these constants over string literals when wiring `PluginManager` / `configure(Map)`.
+Reference implementations live under `io.github.cvs0.bytecode.plugin.impl`. They expose **configuration key constants** (e.g. `ObfuscationPlugin.CFG_NAME_PREFIX`, `OptimizationPlugin.CFG_REMOVE_NOPS`) and Javadoc tables describing each flag. Prefer these constants over string literals when wiring `PluginManager` / `configure(Map)`.
 
 ## Architecture
 
