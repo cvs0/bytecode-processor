@@ -1,6 +1,8 @@
 package net.cvs0.bytecode;
 
 import net.cvs0.bytecode.clazz.LibraryClass;
+import net.cvs0.bytecode.clazz.ModuleInfoClass;
+import net.cvs0.bytecode.clazz.PackageInfoClass;
 import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.util.JarReader;
 import net.cvs0.bytecode.util.JarWriter;
@@ -13,7 +15,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Represents a mapping of classes and resources within a JAR file.
- * Provides methods to add, remove, and retrieve program and library classes, as well as resources.
+ * Provides methods to add, remove, and retrieve program and library classes, {@link ModuleInfoClass module descriptors},
+ * {@link PackageInfoClass package-info} entries, and resources.
  * Supports reading from and writing to JAR files.
  *
  * <p>Program and library class maps are backed by {@link java.util.concurrent.ConcurrentHashMap}; individual
@@ -26,6 +29,10 @@ public class JarMapping {
     private final Map<String, LibraryClass> libraryClasses = new ConcurrentHashMap<>();
     /** Map of resource names to their byte array data. */
     private final Map<String, byte[]> resources = new ConcurrentHashMap<>();
+    /** {@code module-info.class} entries keyed by JAR entry path (supports multi-release). */
+    private final Map<String, ModuleInfoClass> moduleInfos = new ConcurrentHashMap<>();
+    /** {@code package-info.class} entries keyed by JAR entry path. */
+    private final Map<String, PackageInfoClass> packageInfos = new ConcurrentHashMap<>();
     /** Path to the JAR file represented by this mapping. */
     private final String jarPath;
     
@@ -93,6 +100,60 @@ public class JarMapping {
         Objects.requireNonNull(data, "data");
         resources.put(name, data);
     }
+
+    /**
+     * Adds a module descriptor ({@code module-info.class}) to the mapping.
+     *
+     * @param jarEntryName JAR path (e.g. {@code module-info.class} or {@code META-INF/versions/9/module-info.class})
+     */
+    public void addModuleInfo(String jarEntryName, ModuleInfoClass moduleInfo) {
+        Objects.requireNonNull(jarEntryName, "jarEntryName");
+        Objects.requireNonNull(moduleInfo, "moduleInfo");
+        moduleInfos.put(jarEntryName, moduleInfo);
+    }
+
+    /**
+     * Adds a {@code package-info.class} entry to the mapping.
+     *
+     * @param jarEntryName JAR path (e.g. {@code com/example/package-info.class})
+     */
+    public void addPackageInfo(String jarEntryName, PackageInfoClass packageInfo) {
+        Objects.requireNonNull(jarEntryName, "jarEntryName");
+        Objects.requireNonNull(packageInfo, "packageInfo");
+        packageInfos.put(jarEntryName, packageInfo);
+    }
+
+    public ModuleInfoClass getModuleInfo(String jarEntryName) {
+        return moduleInfos.get(jarEntryName);
+    }
+
+    public PackageInfoClass getPackageInfo(String jarEntryName) {
+        return packageInfos.get(jarEntryName);
+    }
+
+    public Collection<ModuleInfoClass> getModuleInfos() {
+        return Collections.unmodifiableCollection(moduleInfos.values());
+    }
+
+    public Set<String> getModuleInfoEntryNames() {
+        return Collections.unmodifiableSet(moduleInfos.keySet());
+    }
+
+    public Collection<PackageInfoClass> getPackageInfos() {
+        return Collections.unmodifiableCollection(packageInfos.values());
+    }
+
+    public Set<String> getPackageInfoEntryNames() {
+        return Collections.unmodifiableSet(packageInfos.keySet());
+    }
+
+    public void removeModuleInfo(String jarEntryName) {
+        moduleInfos.remove(jarEntryName);
+    }
+
+    public void removePackageInfo(String jarEntryName) {
+        packageInfos.remove(jarEntryName);
+    }
     
     /**
      * Retrieves a program class by name.
@@ -152,6 +213,12 @@ public class JarMapping {
     public void removeClass(String name) {
         programClasses.remove(name);
         libraryClasses.remove(name);
+        for (var it = packageInfos.entrySet().iterator(); it.hasNext(); ) {
+            var e = it.next();
+            if (name.equals(e.getValue().getInternalName())) {
+                it.remove();
+            }
+        }
     }
     
     /**
@@ -175,11 +242,21 @@ public class JarMapping {
             programClass.setName(newName);
             programClasses.put(newName, programClass);
         }
-        
+
         LibraryClass libraryClass = libraryClasses.remove(oldName);
         if (libraryClass != null) {
             libraryClass.setName(newName);
             libraryClasses.put(newName, libraryClass);
+        }
+
+        for (var e : new ArrayList<>(packageInfos.entrySet())) {
+            PackageInfoClass pic = e.getValue();
+            if (oldName.equals(pic.getInternalName())) {
+                packageInfos.remove(e.getKey());
+                pic.setJarEntryName(newName + ".class");
+                pic.getClassNode().name = newName;
+                packageInfos.put(pic.getJarEntryName(), pic);
+            }
         }
     }
     
@@ -217,7 +294,18 @@ public class JarMapping {
      * @return the total class count
      */
     public int getTotalClassCount() {
-        return programClasses.size() + libraryClasses.size();
+        return programClasses.size()
+                + libraryClasses.size()
+                + moduleInfos.size()
+                + packageInfos.size();
+    }
+
+    public int getModuleInfoCount() {
+        return moduleInfos.size();
+    }
+
+    public int getPackageInfoCount() {
+        return packageInfos.size();
     }
     
     /**

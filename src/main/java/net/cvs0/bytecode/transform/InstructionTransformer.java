@@ -226,13 +226,7 @@ public class InstructionTransformer {
     }
     
     private void rebuildInstructionList() {
-        method.clearInstructions();
-        
-        if (method.getMethodNode() != null && method.getMethodNode().instructions != null) {
-            for (AbstractInsnNode insn : method.getMethodNode().instructions) {
-                method.addInstruction(new Instruction(insn));
-            }
-        }
+        method.resyncInstructionsFromMethodNode();
     }
     
     public static InstructionTransformer forMethod(ProgramMethod method) {

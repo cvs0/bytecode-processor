@@ -1,6 +1,8 @@
 package net.cvs0.bytecode.integration;
 
 import net.cvs0.bytecode.JarMapping;
+import net.cvs0.bytecode.clazz.ModuleInfoClass;
+import net.cvs0.bytecode.clazz.PackageInfoClass;
 import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.transform.ClassTransformer;
 import net.cvs0.bytecode.util.JarReader;
@@ -11,6 +13,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.ModuleNode;
 
 import java.io.File;
 import java.io.IOException;
@@ -106,5 +109,42 @@ class JarReadWriteRoundTripTest {
         assertNull(c.getProgramClass("rt/Original"));
         assertNotNull(c.getProgramClass("rt/Renamed"));
         assertEquals(1, c.getProgramClass("rt/Renamed").getClassNode().methods.size());
+    }
+
+    @Test
+    void writeThenReadModuleInfoAndPackageInfo() throws IOException {
+        ClassNode modCn = new ClassNode();
+        modCn.version = Opcodes.V9;
+        modCn.access = Opcodes.ACC_MODULE;
+        modCn.name = "module-info";
+        modCn.module = new ModuleNode("roundtrip.demo", 0, null);
+
+        ClassNode pkgCn = new ClassNode();
+        pkgCn.version = Opcodes.V17;
+        pkgCn.access = Opcodes.ACC_SYNTHETIC | Opcodes.ACC_INTERFACE | Opcodes.ACC_ABSTRACT;
+        pkgCn.name = "roundtrip/demo/package-info";
+        pkgCn.superName = "java/lang/Object";
+
+        JarMapping out = new JarMapping("source.jar");
+        out.addModuleInfo("module-info.class", new ModuleInfoClass("module-info.class", modCn, Opcodes.V9));
+        out.addPackageInfo(
+                "roundtrip/demo/package-info.class",
+                new PackageInfoClass("roundtrip/demo/package-info.class", pkgCn, Opcodes.V17));
+
+        File jarFile = tempDir.resolve("modpkg.jar").toFile();
+        JarWriter.write(out, jarFile);
+
+        JarMapping in = new JarMapping(jarFile.getAbsolutePath());
+        JarReader.read(jarFile, in);
+
+        assertEquals(0, in.getProgramClasses().size());
+        assertEquals(1, in.getModuleInfoCount());
+        assertEquals(1, in.getPackageInfoCount());
+        assertNotNull(in.getModuleInfo("module-info.class"));
+        assertNotNull(in.getPackageInfo("roundtrip/demo/package-info.class"));
+        assertEquals("module-info", in.getModuleInfo("module-info.class").getClassNode().name);
+        assertEquals(
+                "roundtrip/demo/package-info",
+                in.getPackageInfo("roundtrip/demo/package-info.class").getClassNode().name);
     }
 }

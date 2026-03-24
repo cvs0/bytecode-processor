@@ -2,6 +2,7 @@ module bytecode.processor {
     requires java.logging;
     requires org.objectweb.asm.tree;
     requires info.picocli;
+    requires static lombok;
 
     exports net.cvs0.bytecode;
     exports net.cvs0.bytecode.attribute;

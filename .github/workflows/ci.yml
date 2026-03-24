@@ -6,6 +6,7 @@ on:
       - main
       - master
       - develop
+      - development
       - "release/**"
       - "v*"
   pull_request:
@@ -13,8 +14,14 @@ on:
       - main
       - master
       - develop
+      - development
       - "release/**"
       - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   verify:
@@ -27,6 +34,13 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+          server-id: github
+          server-username: ${{ github.actor }}
+          server-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Maven verify
         run: mvn -B verify
+
+      - name: Publish SNAPSHOT to GitHub Packages (develop / development only)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/development')
+        run: mvn -B deploy -DskipTests -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${{ github.repository }}

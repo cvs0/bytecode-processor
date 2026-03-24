@@ -1,6 +1,8 @@
 package net.cvs0.bytecode.util;
 
 import net.cvs0.bytecode.JarMapping;
+import net.cvs0.bytecode.clazz.ModuleInfoClass;
+import net.cvs0.bytecode.clazz.PackageInfoClass;
 import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.member.ProgramField;
 import net.cvs0.bytecode.member.ProgramMethod;
@@ -36,10 +38,10 @@ public class JarReader {
                 }
                 String entryName = entry.getName();
                 if (entryName.endsWith(".class")) {
-                    if (entryName.equals("module-info.class")) {
-                        processModuleInfoEntry(jar, entry, mapping);
+                    if (entryName.endsWith("module-info.class")) {
+                        processModuleInfoEntry(jar, entry, entryName, mapping);
                     } else if (entryName.endsWith("package-info.class")) {
-                        processPackageInfoEntry(jar, entry, mapping);
+                        processPackageInfoEntry(jar, entry, entryName, mapping);
                     } else {
                         processClassEntry(jar, entry, mapping);
                     }
@@ -57,20 +59,16 @@ public class JarReader {
      * @param mapping the JarMapping
      * @throws IOException if reading fails
      */
-    private static void processModuleInfoEntry(JarFile jar, JarEntry entry, JarMapping mapping) throws IOException {
+    private static void processModuleInfoEntry(JarFile jar, JarEntry entry, String entryName, JarMapping mapping) throws IOException {
         try (InputStream inputStream = jar.getInputStream(entry)) {
             byte[] classBytes = inputStream.readAllBytes();
             ClassReader classReader = new ClassReader(classBytes);
             ClassNode classNode = new ClassNode();
             classReader.accept(classNode, 0);
-            // Store module info as a special ProgramClass or ModuleInfo model
-            if (classNode.module != null) {
-                // Optionally, create a ModuleInfo model and add to mapping
-                // mapping.addModuleInfo(new ModuleInfo(classNode.module));
-            }
-            // Optionally, store as a ProgramClass for uniformity
-            ProgramClass programClass = new ProgramClass(classNode);
-            mapping.addClass(programClass);
+            int classVersion = classReader.readShort(6) & 0xFFFF;
+            mapping.addModuleInfo(entryName, new ModuleInfoClass(entryName, classNode, classVersion));
+        } catch (Exception e) {
+            throw new IOException("Failed to load module descriptor: " + entryName, e);
         }
     }
 
@@ -81,17 +79,16 @@ public class JarReader {
      * @param mapping the JarMapping
      * @throws IOException if reading fails
      */
-    private static void processPackageInfoEntry(JarFile jar, JarEntry entry, JarMapping mapping) throws IOException {
+    private static void processPackageInfoEntry(JarFile jar, JarEntry entry, String entryName, JarMapping mapping) throws IOException {
         try (InputStream inputStream = jar.getInputStream(entry)) {
             byte[] classBytes = inputStream.readAllBytes();
             ClassReader classReader = new ClassReader(classBytes);
             ClassNode classNode = new ClassNode();
             classReader.accept(classNode, 0);
-            // Optionally, create a PackageInfo model and add to mapping
-            // mapping.addPackageInfo(new PackageInfo(classNode));
-            // Or store as a ProgramClass
-            ProgramClass programClass = new ProgramClass(classNode);
-            mapping.addClass(programClass);
+            int classVersion = classReader.readShort(6) & 0xFFFF;
+            mapping.addPackageInfo(entryName, new PackageInfoClass(entryName, classNode, classVersion));
+        } catch (Exception e) {
+            throw new IOException("Failed to load package-info: " + entryName, e);
         }
     }
 

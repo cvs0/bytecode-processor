@@ -33,8 +33,8 @@ Artifacts under `target/` after `mvn package`:
 
 | File | Role |
 |------|------|
-| `bytecode-processor-1.1.jar` | **Library**: modular JAR (`module bytecode.processor`). Use on the **module path** (or as an automatic module on the classpath). Does **not** embed ASM or Picocli. |
-| `bytecode-processor-1.1-all.jar` | **Runnable CLI**: shaded uber-JAR with ASM, ASM Tree/Commons/Util/Analysis, and Picocli. No `module-info`; run with `java -jar`. |
+| `bytecode-processor-${revision}.jar` | **Library**: modular JAR (`module bytecode.processor`). Resolved version from `${revision}` in `pom.xml` (flattened at build time). Does **not** embed ASM or Picocli. |
+| `bytecode-processor-${revision}-all.jar` | **Runnable CLI**: shaded uber-JAR (ASM stack + Picocli). No `module-info`; run with `java -jar`. |
 
 Install into the local repository for use in other projects:
 
@@ -59,11 +59,13 @@ On Unix, ensure the hook is executable: `chmod +x .githooks/pre-commit`.
 <dependency>
     <groupId>net.cvs0</groupId>
     <artifactId>bytecode-processor</artifactId>
-    <version>1.1</version>
+    <version>1.2.0</version>
 </dependency>
 ```
 
-Released versions are published to **GitHub Packages** when you push a `v*` tag; add the `github` repository and credentials as described under [CI and releases](#ci-and-releases). For a local `mvn install` build, no extra repository is needed.
+Replace `1.2.0` with the release you depend on. Released versions are published to **GitHub Packages** when you push a `v*` tag; add the `github` repository and credentials as described under [CI and releases](#ci-and-releases). For a local `mvn install` build, no extra repository is needed.
+
+This project uses **Lombok** (`provided` scope) for generated accessors on a few types (e.g. `AbstractPlugin`, `InnerClass`). Install the [Lombok plugin](https://projectlombok.org/setup/) for your IDE so code navigation and completion stay accurate.
 
 Your module (or automatic module) must **read** ASM tree and, if you use the CLI types, Picocli. The library module declares:
 
@@ -74,7 +76,7 @@ Your module (or automatic module) must **read** ASM tree and, if you use the CLI
 **Module path example** (application `module app { requires bytecode.processor; … }`):
 
 ```bash
-java --module-path lib/bytecode-processor-1.1.jar:lib/asm-tree-9.7.jar:... -m app/com.example.Main
+java --module-path lib/bytecode-processor-1.2.0-SNAPSHOT.jar:lib/asm-tree-9.7.jar:... -m app/com.example.Main
 ```
 
 (Resolve the full ASM stack to match the versions in this project’s `pom.xml`.)
@@ -140,7 +142,7 @@ Use internal names consistent with the mapping at the time `applyTransformations
 - **`Plugin`**: `getName`, `getVersion`, `getDescription`, `initialize()`, `process(JarMapping)`, `cleanup()`, optional `isEnabled()`, `getPriority()` (higher runs first).
 - **`PluginManager`**: `registerPlugin`, `initializePlugins()` (throws `IllegalStateException` with **suppressed** causes if any plugin’s `initialize()` fails), `processWithPlugins(JarMapping)` returns `boolean` (`false` if any enabled plugin’s `process` threw); process/cleanup failures are **`java.util.logging` WARNING** with stack traces; processing continues with remaining plugins.
 
-Bundled examples: `OptimizationPlugin`, `ObfuscationPlugin` (see `net.cvs0.bytecode.plugin.impl`).
+Bundled examples: `OptimizationPlugin`, `ObfuscationPlugin` in `net.cvs0.bytecode.plugin.impl` (see [Example plugins](#example-plugins) under Contributing).
 
 ### Analysis and utilities
 
@@ -160,7 +162,7 @@ Global Picocli options (all commands): **`-h`**, **`--help`**, **`-V`**, **`--ve
 ### Invocation
 
 ```bash
-java -jar target/bytecode-processor-1.1-all.jar [COMMAND] [ARGS]
+java -jar target/bytecode-processor-*-all.jar [COMMAND] [ARGS]
 ```
 
 Without a subcommand, the root command prints usage to stdout.
@@ -210,7 +212,7 @@ Coverage report: `target/site/jacoco/index.html` after `verify`.
 
 ### CI and releases
 
-- **GitHub Actions**: on pushes and pull requests targeting **`main`**, **`master`**, **`develop`**, **`release/**`**, or version lines **`v*`** (e.g. `v1.1`), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `mvn -B verify` (build and test only; **no** Maven publish).
+- **GitHub Actions**: on pushes and pull requests targeting **`main`**, **`master`**, **`develop`**, **`development`**, **`release/**`**, or version lines **`v*`** (e.g. `v1.1`), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **`mvn -B verify`**. You can also run that workflow manually from the Actions tab (**workflow dispatch**). Pushes to **`develop`** or **`development`** additionally run **`mvn deploy`** (after a successful verify) and publish a **SNAPSHOT** to [**GitHub Packages**](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry) using the same `github` server id as releases.
 - **Releases**: after updating `<version>` in `pom.xml`, create and push a tag (e.g. `git tag -a v1.2.0 -m "1.2.0"` then `git push origin v1.2.0`). [`.github/workflows/release.yml`](.github/workflows/release.yml) runs **`mvn verify deploy`**, publishes **`net.cvs0:bytecode-processor`** (main JAR, POM, and the **`all`** shaded classifier) to [**GitHub Packages**](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry), and uploads both JARs to a GitHub Release for that tag.
 
 **Consume the artifact from GitHub Packages** (Maven requires authentication to this registry even for public repos):
@@ -233,7 +235,7 @@ Coverage report: `target/site/jacoco/index.html` after `verify`.
 | Branch pattern | Purpose |
 |----------------|---------|
 | **`main`** | Default branch. Production-ready code; `<version>` in `pom.xml` matches what you intend to ship next. Merge only via pull request (reviews, CI green). |
-| **`develop`** | Optional integration line. Use when you want a staging area: merge features here first, then merge `develop` → `main` at release time. If you prefer **trunk-based** development, you can omit `develop` and target **`main`** only. |
+| **`develop`** / **`development`** | Optional integration lines (this repo runs CI on both names). Merge features here first, then merge into `main` at release time, or use **trunk-based** flow and target **`main`** only. |
 | **`release/x.y.z`** | Short-lived stabilization (e.g. `release/1.2.0`). Branch from `main` or `develop` when the version is frozen; only bugfixes and release prep; merge back to `main` (and `develop` if used), then tag. |
 | **`v1.x`** (example: `v1.1`) | **Maintenance** for an already-shipped major/minor line. Patch releases (`1.1.1`, `1.1.2`) happen here; cherry-pick or merge fixes from `main` as appropriate, bump patch version, tag `v1.1.1`, etc. |
 | **`feature/…`** | New work. Branch from `main` (or `develop` if you use it). Name briefly: `feature/deps-dot-export`, `fix/jar-writer-manifest`. |
@@ -249,8 +251,10 @@ Create the integration branch once and publish it:
 git fetch origin
 git checkout main
 git pull origin main
-git branch develop main          # skip if you do not want develop
-git push -u origin develop       # skip if you skipped develop
+git branch develop main          # optional integration branch
+git push -u origin develop
+git branch development main      # optional alias (CI also watches `development`)
+git push -u origin development
 ```
 
 Create a maintenance line after a major/minor release (example: supporting `1.1.x` while `main` moves to `1.2`):
@@ -279,9 +283,22 @@ Then open a **pull request** on GitHub into `main` (or `develop`).
 
 ### Versioning and `pom.xml`
 
-- **On `main`**: set `<version>` to the next release you plan to tag (e.g. `1.2.0-SNAPSHOT` during development or `1.2.0` right before release, per your preference).
-- **On `v1.1`**: keep `<version>` as `1.1.x` / `1.1.x-SNAPSHOT` for that line only.
-- Align the Git tag with the published Maven version (e.g. tag `v1.2.0` when `pom.xml` says `1.2.0`).
+The project version is driven by the **`revision`** property and the [**flatten-maven-plugin**](https://www.mojohaus.org/flatten-maven-plugin/) (`flattenMode: resolveCiFriendliesOnly`):
+
+```xml
+<version>${revision}</version>
+<!-- in <properties>: -->
+<revision>1.2.0-SNAPSHOT</revision>
+```
+
+- **Default (`main` / `development`)**: `<revision>1.2.0-SNAPSHOT</revision>` — next minor development line. Override on the CLI with `-Drevision=…` when needed.
+- **Maintenance branch (`v1.1`, …)**: set `<revision>` to that line only, e.g. `1.1.1-SNAPSHOT`, until you cut a patch release.
+- **Release commit**: drop `-SNAPSHOT` (e.g. `1.2.0`), tag `v1.2.0`, then bump `main` to the next SNAPSHOT (e.g. `1.3.0-SNAPSHOT`) on the branch that continues development.
+- Align the Git tag with the published Maven version (the release workflow resolves `${revision}` the same way as a local `mvn verify`).
+
+### Example plugins
+
+Reference implementations live under `net.cvs0.bytecode.plugin.impl`. They expose **configuration key constants** (e.g. `ObfuscationPlugin.CFG_NAME_PREFIX`, `OptimizationPlugin.CFG_REMOVE_NOPS`) and Javadoc tables describing each flag. Prefer these constants over string literals when wiring `PluginManager` / `configure(Map)`.
 
 ## Architecture
 

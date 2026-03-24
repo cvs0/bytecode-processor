@@ -177,6 +177,19 @@ public class ProgramMethod {
     }
 
     /**
+     * Rebuilds the high-level {@link Instruction} list from the backing {@link MethodNode}'s {@link InsnList}.
+     * The ASM list is not modified.
+     */
+    public void resyncInstructionsFromMethodNode() {
+        instructions.clear();
+        if (methodNode != null && methodNode.instructions != null) {
+            for (AbstractInsnNode insn : methodNode.instructions) {
+                instructions.add(new Instruction(insn));
+            }
+        }
+    }
+
+    /**
      * Returns all attributes of this method.
      * @return unmodifiable list of attributes
      */

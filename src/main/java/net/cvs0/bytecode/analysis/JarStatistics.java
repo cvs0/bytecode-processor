@@ -18,6 +18,8 @@ public final class JarStatistics {
     private final int publicClassCount;
     private final int totalMethods;
     private final int totalFields;
+    private final int moduleDescriptorCount;
+    private final int packageInfoCount;
 
     private JarStatistics(
             int programClassCount,
@@ -28,7 +30,9 @@ public final class JarStatistics {
             int finalClassCount,
             int publicClassCount,
             int totalMethods,
-            int totalFields) {
+            int totalFields,
+            int moduleDescriptorCount,
+            int packageInfoCount) {
         this.programClassCount = programClassCount;
         this.libraryClassCount = libraryClassCount;
         this.resourceCount = resourceCount;
@@ -38,6 +42,8 @@ public final class JarStatistics {
         this.publicClassCount = publicClassCount;
         this.totalMethods = totalMethods;
         this.totalFields = totalFields;
+        this.moduleDescriptorCount = moduleDescriptorCount;
+        this.packageInfoCount = packageInfoCount;
     }
 
     /**
@@ -76,7 +82,9 @@ public final class JarStatistics {
                 finals,
                 publics,
                 methods,
-                fields);
+                fields,
+                mapping.getModuleInfoCount(),
+                mapping.getPackageInfoCount());
     }
 
     public int getProgramClassCount() {
@@ -113,5 +121,13 @@ public final class JarStatistics {
 
     public int getTotalFields() {
         return totalFields;
+    }
+
+    public int getModuleDescriptorCount() {
+        return moduleDescriptorCount;
+    }
+
+    public int getPackageInfoCount() {
+        return packageInfoCount;
     }
 }

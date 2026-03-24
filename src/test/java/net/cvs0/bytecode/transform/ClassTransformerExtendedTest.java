@@ -1,16 +1,22 @@
 package net.cvs0.bytecode.transform;
 
 import net.cvs0.bytecode.JarMapping;
+import net.cvs0.bytecode.clazz.ModuleInfoClass;
+import net.cvs0.bytecode.clazz.PackageInfoClass;
 import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.member.ProgramMethod;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.ModuleExportNode;
+import org.objectweb.asm.tree.ModuleNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.MethodNode;
+
+import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -31,6 +37,40 @@ class ClassTransformerExtendedTest {
         assertNotNull(m.getProgramClass("com/new/A"));
         assertNotNull(m.getProgramClass("com/new/nested/B"));
         assertNotNull(m.getProgramClass("com/other/C"));
+    }
+
+    @Test
+    void renamePackageMovesPackageInfoAndModuleExportPackages() {
+        JarMapping m = new JarMapping("x.jar");
+        m.addClass(new ProgramClass("com/old/App"));
+
+        ClassNode pkgCn = new ClassNode();
+        pkgCn.version = Opcodes.V17;
+        pkgCn.access = Opcodes.ACC_SYNTHETIC | Opcodes.ACC_INTERFACE | Opcodes.ACC_ABSTRACT;
+        pkgCn.name = "com/old/package-info";
+        pkgCn.superName = "java/lang/Object";
+        m.addPackageInfo("com/old/package-info.class", new PackageInfoClass("com/old/package-info.class", pkgCn, Opcodes.V17));
+
+        ClassNode modCn = new ClassNode();
+        modCn.version = Opcodes.V9;
+        modCn.access = Opcodes.ACC_MODULE;
+        modCn.name = "module-info";
+        ModuleNode module = new ModuleNode("m", 0, null);
+        modCn.module = module;
+        module.exports = new ArrayList<>();
+        module.exports.add(new ModuleExportNode("com/old", 0, null));
+        m.addModuleInfo("module-info.class", new ModuleInfoClass("module-info.class", modCn, Opcodes.V9));
+
+        ClassTransformer t = new ClassTransformer(m);
+        t.renamePackage("com.old", "com.ren");
+        t.applyTransformations();
+
+        assertNull(m.getPackageInfo("com/old/package-info.class"));
+        PackageInfoClass pi = m.getPackageInfo("com/ren/package-info.class");
+        assertNotNull(pi);
+        assertEquals("com/ren/package-info", pi.getInternalName());
+
+        assertEquals("com/ren", modCn.module.exports.getFirst().packaze);
     }
 
     @Test

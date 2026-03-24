@@ -1,7 +1,12 @@
 package net.cvs0.bytecode;
 
-import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.clazz.LibraryClass;
+import net.cvs0.bytecode.clazz.ModuleInfoClass;
+import net.cvs0.bytecode.clazz.PackageInfoClass;
+import net.cvs0.bytecode.clazz.ProgramClass;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.ModuleNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -111,6 +116,29 @@ class JarMappingTest {
         jarMapping.addLibraryClass(new LibraryClass("java/lang/String"));
         
         assertEquals(3, jarMapping.getTotalClassCount());
+    }
+
+    @Test
+    void moduleAndPackageInfoIncreaseTotalClassCount() {
+        ClassNode mod = new ClassNode();
+        mod.version = Opcodes.V9;
+        mod.access = Opcodes.ACC_MODULE;
+        mod.name = "module-info";
+        mod.module = new ModuleNode("demo", 0, null);
+        jarMapping.addModuleInfo("module-info.class", new ModuleInfoClass("module-info.class", mod, Opcodes.V9));
+
+        ClassNode pkg = new ClassNode();
+        pkg.version = Opcodes.V17;
+        pkg.access = Opcodes.ACC_SYNTHETIC | Opcodes.ACC_INTERFACE | Opcodes.ACC_ABSTRACT;
+        pkg.name = "com/example/package-info";
+        pkg.superName = "java/lang/Object";
+        jarMapping.addPackageInfo("com/example/package-info.class", new PackageInfoClass("com/example/package-info.class", pkg, Opcodes.V17));
+
+        assertEquals(1, jarMapping.getModuleInfoCount());
+        assertEquals(1, jarMapping.getPackageInfoCount());
+        assertEquals(2, jarMapping.getTotalClassCount());
+        assertNotNull(jarMapping.getModuleInfo("module-info.class"));
+        assertNotNull(jarMapping.getPackageInfo("com/example/package-info.class"));
     }
     
     @Test
