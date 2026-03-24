@@ -16,7 +16,11 @@ import java.util.List;
  * {@link ClassTransformer} once at the end. Program classes are visited in sorted name order so naming is stable
  * across runs. After transforms, merged classpath bytecode (from {@link io.github.cvs0.bytecode.JarMapping#mergeClasspathJar})
  * is rewritten so dependencies still reference renamed types; {@code META-INF/services/*} paths and provider lines plus
- * manifest launch attributes ({@code Main-Class}, {@code Start-Class}, etc.) are updated when possible.</p>
+ * manifest launch attributes ({@code Main-Class}, {@code Start-Class}, etc.) are updated when possible.
+ * For modular JARs, {@code module-info} {@code uses}, {@code provides}, and modular {@code mainClass} strings are
+ * remapped with renamed types; export/open <em>package</em> lists are not adjusted when the obfuscated layout no
+ * longer matches those packages (use {@link io.github.cvs0.bytecode.transform.ClassTransformer#renamePackage} for
+ * coherent package moves).</p>
  *
  * <p><b>Configuration keys</b> (via {@link io.github.cvs0.bytecode.plugin.ConfigurablePlugin#configure})</p>
  * <table border="1" summary="ObfuscationPlugin configuration">

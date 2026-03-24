@@ -20,6 +20,7 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.ModuleExportNode;
 import org.objectweb.asm.tree.ModuleNode;
 import org.objectweb.asm.tree.ModuleOpenNode;
+import org.objectweb.asm.tree.ModuleProvideNode;
 import org.objectweb.asm.tree.MultiANewArrayInsnNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
@@ -630,6 +631,7 @@ public class ClassTransformer {
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             updateClassReferences(clazz);
         }
+        remapModuleDescriptorClassReferences();
     }
     
     /**
@@ -713,6 +715,57 @@ public class ClassTransformer {
         if (!classNameMappings.isEmpty()) {
             for (ProgramMethod method : clazz.getMethods()) {
                 remapInstructionDescriptors(method);
+            }
+        }
+    }
+
+    /**
+     * Keeps {@code module-info} class references aligned after {@link #renameClass} (e.g. {@code uses}, {@code provides},
+     * modular JAR {@code mainClass}). Export/open <em>packages</em> are updated by {@link #renamePackage} only.
+     */
+    private void remapModuleDescriptorClassReferences() {
+        if (classNameMappings.isEmpty()) {
+            return;
+        }
+        for (ModuleInfoClass mic : mapping.getModuleInfos()) {
+            ClassNode cn = mic.getClassNode();
+            if (cn == null || cn.module == null) {
+                continue;
+            }
+            ModuleNode mod = cn.module;
+            if (mod.mainClass != null) {
+                String mapped = classNameMappings.get(mod.mainClass);
+                if (mapped != null) {
+                    mod.mainClass = mapped;
+                }
+            }
+            if (mod.uses != null) {
+                for (int i = 0; i < mod.uses.size(); i++) {
+                    String u = mod.uses.get(i);
+                    String mapped = classNameMappings.get(u);
+                    if (mapped != null) {
+                        mod.uses.set(i, mapped);
+                    }
+                }
+            }
+            if (mod.provides != null) {
+                for (ModuleProvideNode p : mod.provides) {
+                    if (p.service != null) {
+                        String mapped = classNameMappings.get(p.service);
+                        if (mapped != null) {
+                            p.service = mapped;
+                        }
+                    }
+                    if (p.providers != null) {
+                        for (int i = 0; i < p.providers.size(); i++) {
+                            String pr = p.providers.get(i);
+                            String mapped = classNameMappings.get(pr);
+                            if (mapped != null) {
+                                p.providers.set(i, mapped);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
