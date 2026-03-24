@@ -4,14 +4,22 @@ import io.github.cvs0.bytecode.clazz.LibraryClass;
 import io.github.cvs0.bytecode.clazz.ModuleInfoClass;
 import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
+import io.github.cvs0.bytecode.util.JarLayout;
 import io.github.cvs0.bytecode.util.JarReader;
 import io.github.cvs0.bytecode.util.JarWriter;
+import io.github.cvs0.bytecode.util.ManifestPatcher;
+import io.github.cvs0.bytecode.util.MergedClasspathBytecodeRemapper;
+import io.github.cvs0.bytecode.util.ServiceLoaderResourcePatcher;
+import org.objectweb.asm.ClassReader;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 /**
  * Represents a mapping of classes and resources within a JAR file.
@@ -21,6 +29,11 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Program and library class maps are backed by {@link java.util.concurrent.ConcurrentHashMap}; individual
  * {@link ProgramClass} instances are not thread-safe unless documented otherwise.
+ *
+ * <p>Use {@link #mergeClasspathJar(Path)} (or {@link #mergeClasspathJars(Iterable)}) to fold dependency JARs into the
+ * mapping for fat-JAR output; merged {@code .class} files are not modeled as {@link ProgramClass}. After obfuscation,
+ * {@link #remapMergedClasspathBytecode} (invoked from {@link io.github.cvs0.bytecode.plugin.impl.ObfuscationPlugin})
+ * should be used so merged bytecode still references renamed application code.</p>
  */
 public class JarMapping {
     /** Map of program class names to their ProgramClass representations. */
@@ -35,6 +48,11 @@ public class JarMapping {
     private final Map<String, PackageInfoClass> packageInfos = new ConcurrentHashMap<>();
     /** Path to the JAR file represented by this mapping. */
     private final String jarPath;
+    /**
+     * Raw JAR entries merged from classpath JARs (keys are JAR paths such as {@code com/foo/Bar.class}).
+     * Not modeled as {@link ProgramClass}; writers emit them verbatim after program classes.
+     */
+    private final Map<String, byte[]> mergedEntries = new ConcurrentHashMap<>();
     
     /**
      * Constructs a new JarMapping for the specified JAR path.
@@ -70,6 +88,203 @@ public class JarMapping {
         JarMapping mapping = new JarMapping(normalized.toString());
         JarReader.read(normalized.toFile(), mapping);
         return mapping;
+    }
+
+    /**
+     * Merges all entries from another JAR (typically a dependency) into this mapping. Class files become merged
+     * bytecode (skipped when a {@link ProgramClass} with the same internal name already exists). Resources are added
+     * only if absent. Skips the dependency manifest, JAR signatures, and {@code module-info.class} entries.
+     *
+     * @param classpathJar path to the JAR to merge
+     * @throws IOException if reading fails
+     */
+    public void mergeClasspathJar(Path classpathJar) throws IOException {
+        Objects.requireNonNull(classpathJar, "classpathJar");
+        mergeClasspathJar(classpathJar.toFile());
+    }
+
+    /**
+     * Merges each JAR in order. When the same class appears in multiple JARs, the first merge wins.
+     *
+     * @param jars dependency JAR paths
+     * @throws IOException if reading fails
+     */
+    public void mergeClasspathJars(Iterable<? extends Path> jars) throws IOException {
+        Objects.requireNonNull(jars, "jars");
+        for (Path p : jars) {
+            if (p != null) {
+                mergeClasspathJar(p);
+            }
+        }
+    }
+
+    private void mergeClasspathJar(File jarFile) throws IOException {
+        try (JarFile jar = new JarFile(jarFile)) {
+            Enumeration<JarEntry> entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                if (entry.isDirectory()) {
+                    continue;
+                }
+                String name = entry.getName();
+                if (shouldSkipMergedEntry(name)) {
+                    continue;
+                }
+                byte[] data;
+                try (InputStream in = jar.getInputStream(entry)) {
+                    data = in.readAllBytes();
+                }
+                if (name.endsWith(".class")) {
+                    if (name.endsWith("module-info.class")) {
+                        continue;
+                    }
+                    String internal;
+                    try {
+                        internal = new ClassReader(data).getClassName();
+                    } catch (RuntimeException e) {
+                        throw new IOException("Invalid class entry in " + jarFile + ": " + name, e);
+                    }
+                    if (programClasses.containsKey(internal)) {
+                        continue;
+                    }
+                    offerMergedClassEntry(name, data);
+                } else if (resources.get(name) == null) {
+                    addResource(name, data);
+                }
+            }
+        }
+    }
+
+    private static boolean shouldSkipMergedEntry(String name) {
+        if (JarLayout.MANIFEST.equals(name)) {
+            return true;
+        }
+        if (!name.startsWith("META-INF/")) {
+            return false;
+        }
+        String upper = name.toUpperCase(Locale.ROOT);
+        return upper.endsWith(".SF") || upper.endsWith(".RSA") || upper.endsWith(".DSA");
+    }
+
+    /** First writer wins per JAR path; program classes always supersede at merge time. */
+    private void offerMergedClassEntry(String jarEntryPath, byte[] classBytes) {
+        mergedEntries.putIfAbsent(jarEntryPath, classBytes);
+    }
+
+    /**
+     * Merged classpath entry paths, sorted for deterministic JAR output.
+     */
+    public List<String> getMergedEntryPaths() {
+        List<String> paths = new ArrayList<>(mergedEntries.keySet());
+        Collections.sort(paths);
+        return Collections.unmodifiableList(paths);
+    }
+
+    /**
+     * Raw bytes for a merged JAR entry, or {@code null} if absent.
+     */
+    public byte[] getMergedEntry(String jarEntryPath) {
+        return mergedEntries.get(jarEntryPath);
+    }
+
+    public int getMergedEntryCount() {
+        return mergedEntries.size();
+    }
+
+    /**
+     * If {@link JarLayout#MANIFEST} is present and declares {@code Main-Class}, updates it when that class was
+     * renamed. Keys are internal names with slashes (e.g. {@code com/foo/Bar}).
+     */
+    public void remapManifestMainClass(Map<String, String> internalOldToNew) {
+        byte[] raw = resources.get(JarLayout.MANIFEST);
+        byte[] patched = ManifestPatcher.remapLaunchClassAttributes(raw, internalOldToNew);
+        if (patched != null) {
+            resources.put(JarLayout.MANIFEST, patched);
+        }
+    }
+
+    /**
+     * Rewrites merged classpath {@code .class} entries so they still resolve renamed program classes, fields, and methods.
+     *
+     * @param classNameMappings  old internal → new internal (class renames)
+     * @param fieldNameMappings  keys {@code OldOwner.fieldName}
+     * @param methodNameMappings keys {@code OldOwner.name+descriptor}
+     */
+    public void remapMergedClasspathBytecode(
+            Map<String, String> classNameMappings,
+            Map<String, String> fieldNameMappings,
+            Map<String, String> methodNameMappings) {
+        Objects.requireNonNull(classNameMappings, "classNameMappings");
+        Objects.requireNonNull(fieldNameMappings, "fieldNameMappings");
+        Objects.requireNonNull(methodNameMappings, "methodNameMappings");
+        if (mergedEntries.isEmpty()) {
+            return;
+        }
+        if (classNameMappings.isEmpty() && fieldNameMappings.isEmpty() && methodNameMappings.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, byte[]> e : new ArrayList<>(mergedEntries.entrySet())) {
+            String path = e.getKey();
+            if (!path.endsWith(".class")) {
+                continue;
+            }
+            byte[] updated = MergedClasspathBytecodeRemapper.remap(
+                    e.getValue(), classNameMappings, fieldNameMappings, methodNameMappings);
+            mergedEntries.put(path, updated);
+        }
+    }
+
+    /**
+     * Renames {@code META-INF/services/&lt;fully.qualified.Interface&gt;} when the service interface type was renamed.
+     */
+    public void remapServiceLoaderResourcePaths(Map<String, String> internalOldToNew) {
+        Objects.requireNonNull(internalOldToNew, "internalOldToNew");
+        if (internalOldToNew.isEmpty()) {
+            return;
+        }
+        String prefix = "META-INF/services/";
+        for (String name : new ArrayList<>(resources.keySet())) {
+            if (!name.startsWith(prefix) || name.length() <= prefix.length()) {
+                continue;
+            }
+            String remainder = name.substring(prefix.length());
+            if (remainder.indexOf('/') >= 0) {
+                continue;
+            }
+            String internal = remainder.replace('.', '/');
+            String nw = internalOldToNew.get(internal);
+            if (nw == null) {
+                continue;
+            }
+            String newPath = prefix + nw.replace('/', '.');
+            if (newPath.equals(name)) {
+                continue;
+            }
+            byte[] data = resources.remove(name);
+            if (data != null) {
+                resources.put(newPath, data);
+            }
+        }
+    }
+
+    /**
+     * Updates {@code META-INF/services/*} implementation lines for renamed classes.
+     */
+    public void remapServiceLoaderImplementations(Map<String, String> internalOldToNew) {
+        Objects.requireNonNull(internalOldToNew, "internalOldToNew");
+        if (internalOldToNew.isEmpty()) {
+            return;
+        }
+        for (String name : new ArrayList<>(resources.keySet())) {
+            if (!name.startsWith("META-INF/services/") || "META-INF/services/".equals(name)) {
+                continue;
+            }
+            byte[] raw = resources.get(name);
+            byte[] patched = ServiceLoaderResourcePatcher.remapImplementations(raw, internalOldToNew);
+            if (patched != null) {
+                resources.put(name, patched);
+            }
+        }
     }
     
     /**
@@ -290,14 +505,14 @@ public class JarMapping {
     }
     
     /**
-     * Returns the total number of classes (program + library) in this mapping.
-     * @return the total class count
+     * Returns program classes, library classes, module descriptors, package-info entries, and merged dependency classes.
      */
     public int getTotalClassCount() {
         return programClasses.size()
                 + libraryClasses.size()
                 + moduleInfos.size()
-                + packageInfos.size();
+                + packageInfos.size()
+                + mergedEntries.size();
     }
 
     public int getModuleInfoCount() {

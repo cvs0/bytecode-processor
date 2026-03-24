@@ -1,4 +1,4 @@
-package io.github.cvs0.bytecode.example;
+package io.github.cvs0.bytecode.example.local;
 
 import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.analysis.JarStatistics;
@@ -6,17 +6,15 @@ import io.github.cvs0.bytecode.analysis.JarStatistics;
 import java.nio.file.Path;
 
 /**
- * Loads a JAR into a {@link JarMapping} and prints aggregate {@link JarStatistics}.
- *
- * <p>From {@code examples/demo-app}: {@code mvn exec:java -Dexec.args="path/to/sample.jar"} (install the library from
- * the repo root if you use a SNAPSHOT). For a {@code system}-scoped link to {@code ../../target/*.jar}, see
- * {@code examples/local-app/}.
+ * Same idea as {@link io.github.cvs0.bytecode.example.DemoApp}. The library JAR is wired via {@code system} scope using
+ * {@code lib/bytecode-processor-local.jar}, which the repository root build copies from {@code target/} when you run
+ * {@code mvn package} or {@code verify} there.
  */
-public final class DemoApp {
+public final class LocalDemoApp {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("Usage: DemoApp <path-to.jar>");
+            System.err.println("Usage: LocalDemoApp <path-to.jar>");
             System.exit(2);
         }
         Path jar = Path.of(args[0]).toAbsolutePath().normalize();
@@ -33,5 +31,5 @@ public final class DemoApp {
         System.out.println("package-info:       " + stats.getPackageInfoCount());
     }
 
-    private DemoApp() {}
+    private LocalDemoApp() {}
 }

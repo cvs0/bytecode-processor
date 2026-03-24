@@ -867,8 +867,8 @@ public class ClassTransformer {
     }
     
     /**
-     * Returns a copy of the class name mappings.
-     * @return a map of old to new class names
+     * Returns a copy of scheduled class renames (internal slash names). Still populated after
+     * {@link #applyTransformations()} for use when updating manifests or diagnostics.
      */
     public Map<String, String> getClassNameMappings() {
         return new HashMap<>(classNameMappings);

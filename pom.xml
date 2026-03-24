@@ -252,6 +252,30 @@
                     </archive>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>copy-jar-for-local-example</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <property name="local.example.lib"
+                                          value="${project.basedir}/examples/local-app/lib"/>
+                                <mkdir dir="${local.example.lib}"/>
+                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                      tofile="${local.example.lib}/bytecode-processor-local.jar"
+                                      overwrite="true"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
