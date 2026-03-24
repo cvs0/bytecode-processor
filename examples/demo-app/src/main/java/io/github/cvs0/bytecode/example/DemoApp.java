@@ -9,8 +9,7 @@ import java.nio.file.Path;
  * Loads a JAR into a {@link JarMapping} and prints aggregate {@link JarStatistics}.
  *
  * <p>From {@code examples/demo-app}: {@code mvn exec:java -Dexec.args="path/to/sample.jar"} (install the library from
- * the repo root if you use a SNAPSHOT). For a {@code system}-scoped link to {@code ../../target/*.jar}, see
- * {@code examples/local-app/}.
+ * the repo root if you use a SNAPSHOT).
  */
 public final class DemoApp {
 
