@@ -1,27 +1,21 @@
 # Bytecode Processor
 
-A Java bytecode analysis and transformation library built on ASM (tree API). It models JAR contents as editable program classes plus resources, runs dependency analysis, and applies coordinated rewrites (renames, descriptors, instructions, resources) through a single `ClassTransformer` pipeline.
+Java bytecode analysis and transformation on ASM’s tree API. Model a JAR as editable program classes and resources, analyze dependencies, and run coordinated rewrites (renames, descriptors, instructions, resources) through one `ClassTransformer` pipeline.
+
+**Stack:** ASM `ClassNode` / `ProgramClass` model → `DependencyAnalyzer` and utilities → `ClassTransformer` + optional `Plugin`s. CLI is Picocli, shipped as a shaded JAR.
 
 ## Features
 
-- **Dependency analysis**: Class-level dependency graphs, cycle detection, reverse dependents, Graphviz DOT export
-- **Transformation**: Class, method, and field renames with reference propagation; package moves; instruction and LDC hooks; optional debug stripping
-- **Optimization hooks**: NOP removal and related passes via bundled plugins
-- **Plugin system**: Ordered `Plugin` execution with `java.util.logging` diagnostics
-- **CLI**: Picocli-based JAR analysis without writing code
+- Dependency graphs, cycles, reverse dependents, Graphviz DOT export
+- Renames (class, method, field), package moves, instruction/LDC hooks, optional debug stripping
+- Ordered plugins with `java.util.logging` diagnostics
+- Picocli CLI for JAR analysis without embedding the library in your own code
 
----
+## Requirements
 
-## Setup
+JDK **21+** and Maven **3.6.3+** (enforced in the POM).
 
-### Requirements
-
-| Tool | Version |
-|------|---------|
-| JDK | **21** or newer (enforced by Maven) |
-| Maven | **3.6.3** or newer |
-
-### Build from source
+## Quick start
 
 ```bash
 git clone https://github.com/cvs0/bytecode-processor.git
@@ -29,335 +23,90 @@ cd bytecode-processor
 mvn clean verify
 ```
 
-Artifacts under `target/` after `mvn package`:
+Artifacts in `target/` after `package` / `verify`:
 
-| File | Role |
-|------|------|
-| `bytecode-processor-${revision}.jar` | **Library**: modular JAR (`module bytecode.processor`). Resolved version from `${revision}` in `pom.xml` (flattened at build time). Does **not** embed ASM or Picocli. |
-| `bytecode-processor-${revision}-all.jar` | **Runnable CLI**: shaded uber-JAR (ASM stack + Picocli). No `module-info`; run with `java -jar`. |
+| Output | Purpose |
+|--------|---------|
+| `bytecode-processor-${revision}.jar` | Library (`module bytecode.processor`). Does **not** bundle ASM or Picocli. |
+| `bytecode-processor-${revision}-all.jar` | Runnable CLI (shaded). Use `java -jar …`. |
 
-Install into the local repository for use in other projects:
+`${revision}` comes from `pom.xml` and is resolved at build time (flatten plugin).
 
-```bash
-mvn install
-```
+### Maven dependency
 
-### Git hooks (optional)
-
-Hooks live in `.githooks`. Point Git at that directory once per clone:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-On Unix, ensure the hook is executable: `chmod +x .githooks/pre-commit`.  
-**pre-commit** runs `mvn test` from the repository root (faster than full `verify`; CI still runs `verify`).
-
-### Use as a Maven dependency
-
-**Maven Central** (recommended):
+Releases are on **Maven Central**. Replace `VERSION` with the latest release (see [Central](https://central.sonatype.com/) or repo tags).
 
 ```xml
 <dependency>
     <groupId>io.github.cvs0</groupId>
     <artifactId>bytecode-processor</artifactId>
-    <version>1.2.1</version>
+    <version>VERSION</version>
 </dependency>
 ```
 
-No extra repository configuration needed, Maven Central is the default.
-
-**Snapshot builds** are published to [GitHub Packages](https://github.com/cvs0/bytecode-processor/packages) on every push to `main`, `development`, and `release/*` branches:
+**Shaded CLI** as a classified artifact:
 
 ```xml
-<repositories>
-    <repository>
-        <id>github</id>
-        <url>https://maven.pkg.github.com/cvs0/bytecode-processor</url>
-    </repository>
-</repositories>
-<dependency>
-    <groupId>io.github.cvs0</groupId>
-    <artifactId>bytecode-processor</artifactId>
-    <version>1.2.1-SNAPSHOT</version>
-</dependency>
+<classifier>all</classifier>
 ```
 
-For the shaded CLI artifact, use classifier `all`. See [CI and releases](#ci-and-releases). For a local `mvn install` build, no extra repository is needed.
+**Snapshots** (e.g. `1.2.1-SNAPSHOT`) are published to [GitHub Packages](https://github.com/cvs0/bytecode-processor/packages) on pushes to `development`. Add the `https://maven.pkg.github.com/cvs0/bytecode-processor` repository and authenticate as [GitHub documents for Packages](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry).
 
-This project uses **Lombok** (`provided` scope) for generated accessors on a few types (e.g. `AbstractPlugin`, `InnerClass`). Install the [Lombok plugin](https://projectlombok.org/setup/) for your IDE so code navigation and completion stay accurate.
+**JitPack** is also supported: [jitpack.io/#cvs0/bytecode-processor](https://jitpack.io/#cvs0/bytecode-processor).
 
-Your module (or automatic module) must **read** ASM tree and, if you use the CLI types, Picocli. The library module declares:
+### IDE / modules
 
-- `requires org.objectweb.asm.tree;`
-- `requires java.logging;`
-- `requires info.picocli;` (compile-time for `io.github.cvs0.bytecode.cli`, which is not exported)
+The project uses **Lombok** (`provided`). Install the [Lombok IDE support](https://projectlombok.org/setup/) for navigation.
 
-**Module path example** (application `module app { requires bytecode.processor; … }`):
+Consumers need ASM on the module or classpath. The library `requires org.objectweb.asm.tree`, `java.logging`, and `info.picocli` (for the non-exported CLI package). Exported packages are listed in [`module-info.java`](src/main/java/module-info.java); `io.github.cvs0.bytecode.cli` is opened to Picocli only.
 
-```bash
-java --module-path lib/bytecode-processor-1.2.0-SNAPSHOT.jar:lib/asm-tree-9.7.jar:... -m app/com.example.Main
-```
+## Using the library
 
-(Resolve the full ASM stack to match the versions in this project’s `pom.xml`.)
+**Naming:** internal names use JVM slash form (`com/example/Foo`, inner classes `Outer$Inner`). Method rename keys are `className + "." + name + descriptor` (raw descriptor, e.g. `(I)V`). `renamePackage` accepts internal or dot prefixes.
 
----
+**Typical flow:**
 
-## Library documentation
+1. `JarMapping.fromJar(path)` — load classes and resources.
+2. Analyze or inspect (`DependencyAnalyzer`, `JarStatistics`, etc.).
+3. `ClassTransformer(mapping)` — queue changes, then **`applyTransformations()`** once.
+4. `mapping.writeToJar(path)` — write the JAR.
 
-### Module layout
+**Details** (apply order, manifest/resource behavior, thread safety): see Javadoc on `ClassTransformer`, `JarWriter`, and `JarMapping`.
 
-- **Module name**: `bytecode.processor`
-- **Exported packages** (public API):  
-  `io.github.cvs0.bytecode`, `io.github.cvs0.bytecode.attribute`, `io.github.cvs0.bytecode.member`, `io.github.cvs0.bytecode.analysis`, `io.github.cvs0.bytecode.util`, `io.github.cvs0.bytecode.clazz`, `io.github.cvs0.bytecode.instruction`, `io.github.cvs0.bytecode.plugin`, `io.github.cvs0.bytecode.test`, `io.github.cvs0.bytecode.transform`
-- **Non-exported**: `io.github.cvs0.bytecode.cli` is opened only to `info.picocli` for command metadata; embed the CLI by depending on this artifact and invoking `BytecodeCli`, or run the shaded JAR.
+**Plugins:** implement `Plugin` (`initialize`, `process(JarMapping)`, `cleanup`, optional priority). Register with `PluginManager`. Reference configs live under `io.github.cvs0.bytecode.plugin.impl` (`OptimizationPlugin`, `ObfuscationPlugin`).
 
-### Naming conventions
-
-- **Internal names**: JVM slash form, e.g. `com/example/MyClass`, `java/lang/String`.
-- **Method keys** for scheduled renames: `ClassTransformer.renameMethod` uses `className + "." + oldMethodName + descriptor` where `descriptor` is the raw method descriptor (e.g. `(I)V`).
-- **Packages** in `renamePackage`: accepts internal prefix (`com/foo`) or dot form (`com.foo`); inner classes use `$` in the internal class name (`com/foo/Outer$Inner`).
-
-### Core workflow
-
-1. **Load**: `JarMapping.fromJar(Path)` or `fromJar(String)` — parses classes and resources via `JarReader`.
-2. **Inspect / analyze**: e.g. `DependencyAnalyzer.buildDependencyGraph(mapping)`, `JarStatistics.from(mapping)`, `UnusedCodeAnalyzer`, etc.
-3. **Transform**: construct `ClassTransformer(mapping)`, call mutators (`renameClass`, `renamePackage`, `transformInstructions`, …), then **`applyTransformations()`** once to run the full pipeline.
-4. **Write**: `mapping.writeToJar(Path)` or `writeToJar(String)` — delegates to `JarWriter`.
-
-**JAR write semantics**: If the mapping contains a resource entry `META-INF/MANIFEST.MF`, `JarWriter` **does not** write it as a separate ZIP entry, because `JarOutputStream` already supplies a manifest slot. Use the `JarWriter` overload that accepts a `Manifest` if you need explicit manifest control; the embedded manifest wins over a duplicate resource name.
-
-### `JarMapping`
-
-Thread-safe **maps** (`ConcurrentHashMap`) for program classes, library classes, and resources; individual `ProgramClass` instances are not thread-safe unless stated otherwise.
-
-Typical operations: `addClass`, `addLibraryClass`, `addResource`, `getProgramClass`, `getProgramClasses`, `removeClass`, `removeResource`, `renameClass` (mapping keys only — prefer `ClassTransformer` for bytecode-aware renames), `writeToJar`.
-
-### `ClassTransformer`
-
-Single entry point for coordinated bytecode edits. Renames are **queued** until `applyTransformations()`.
-
-**Apply order** (see class Javadoc):
-
-1. Structural tasks (access, hierarchy, interfaces, version, signatures, removals, debug stripping, `visitProgramClasses` hooks).
-2. Scheduled field renames, then method renames, then class renames.
-3. Reference propagation (owners, descriptors, signatures, `invokedynamic`, etc.).
-4. Post tasks: string/LDC transforms, `transformInstructions`, resource renames/removals, `visitMethodsAfterReferences`, etc.
-
-Use internal names consistent with the mapping at the time `applyTransformations()` runs. Higher-level helpers include `renamePackage`, `renameClassesMatching`, descriptor remapping via related utilities, and resource transforms.
-
-### `DependencyAnalyzer`
-
-- `findClassDependencies(ProgramClass)`, `findMethodDependencies(ProgramMethod)` — per-unit edges.
-- `buildDependencyGraph(JarMapping)` — adjacency: program class → set of referenced internal names.
-- `buildReverseDependencyGraph(JarMapping)` — dependent → set of types it depends on.
-- `findUnusedClasses(JarMapping)` — program classes that never appear as a dependency of another program class in the forward graph (not entry-point analysis; reflection and external references can cause false positives).
-- `findCircularDependencies(JarMapping)` — internal names participating in cycles.
-- `getTopologicalOrder(JarMapping)` — ordering consistent with the forward graph when acyclic.
-- `findDependents(mapping, internalClassName)` — program classes that reference the given type.
-- `toDotFormat(graph, graphId)` — Graphviz DOT for a forward `Map<String, Set<String>>`.
-
-### Plugin API
-
-- **`Plugin`**: `getName`, `getVersion`, `getDescription`, `initialize()`, `process(JarMapping)`, `cleanup()`, optional `isEnabled()`, `getPriority()` (higher runs first).
-- **`PluginManager`**: `registerPlugin`, `initializePlugins()` (throws `IllegalStateException` with **suppressed** causes if any plugin’s `initialize()` fails), `processWithPlugins(JarMapping)` returns `boolean` (`false` if any enabled plugin’s `process` threw); process/cleanup failures are **`java.util.logging` WARNING** with stack traces; processing continues with remaining plugins.
-
-Bundled examples: `OptimizationPlugin`, `ObfuscationPlugin` in `io.github.cvs0.bytecode.plugin.impl` (see [Example plugins](#example-plugins) under Contributing).
-
-### Analysis and utilities
-
-- **`JarStatistics`**: aggregate counts (classes, methods, fields, resources, modifiers).
-- **`BytecodeTraversal`**: walk method bodies when reconciling `ProgramMethod` / `ClassNode`.
-- **`DescriptorRemapper`**: type and method descriptor rewriting when class names change.
-- **`JarReader` / `JarWriter`**: low-level I/O; I/O failures surface as `IOException`.
-
----
-
-## CLI documentation
-
-Entry point: **`io.github.cvs0.bytecode.cli.BytecodeCli`** (`main` in shaded JAR).
-
-Global Picocli options (all commands): **`-h`**, **`--help`**, **`-V`**, **`--version`**.
-
-### Invocation
+## CLI
 
 ```bash
 java -jar target/bytecode-processor-*-all.jar [COMMAND] [ARGS]
 ```
 
-Without a subcommand, the root command prints usage to stdout.
+Global options: `-h` / `--help`, `-V` / `--version`. Without a subcommand, usage is printed.
 
-### Commands
+| Command | What it does |
+|---------|----------------|
+| `analyze <jar>` | Full textual report (`JarAnalyzer`-style). Exit `2` if path is not a file. |
+| `stats <jar>` | Aggregates; add `--json` for one-line stats. Exit `2` if missing. |
+| `deps <jar>` | Dependency summary; `--dot <path>` for DOT; `--class <internalName>` for dependents (up to 50). Exit `2` if missing. |
 
-#### `analyze <JAR>`
-
-Runs the same report as `JarAnalyzer.analyzeJar` (full textual analysis to stdout).
-
-- **Arguments**: one positional `JAR` path.
-- **Exit codes**: `0` success; `2` if the path is not a regular file.
-
-#### `stats <JAR>`
-
-Prints aggregate statistics from `JarStatistics`.
-
-- **Arguments**: one positional `JAR` path.
-- **Options**:
-  - `--json` — single-line JSON with keys: `programClasses`, `libraryClasses`, `resources`, `interfaces`, `abstractClasses`, `finalClasses`, `publicClasses`, `methods`, `fields`.
-- **Exit codes**: `0`; `2` if JAR missing.
-
-#### `deps <JAR>`
-
-Dependency summary from `DependencyAnalyzer`.
-
-- **Arguments**: one positional `JAR` path.
-- **Options**:
-  - `--dot <path>` — write forward dependency graph as Graphviz DOT to `path`.
-  - `--class <internalName>` — list program classes that depend on `internalName` (e.g. `com/foo/Bar`). Prints count and up to 50 names sorted.
-- **Stdout**: node count, cycle-involved class count, optional dependent listing, optional DOT path confirmation.
-- **Exit codes**: `0`; `2` if JAR missing.
-
-Picocli parse errors use the library’s default exit codes (non-zero, typically `2`).
-
----
-
-## Build and quality gates
+## Development
 
 ```bash
-mvn clean verify   # unit tests + integration test (shaded CLI) + JaCoCo + enforcer
-mvn test           # unit tests only (no shaded JAR subprocess check)
-mvn package        # library JAR + shaded `-all` JAR
+mvn verify    # tests + integration (shaded CLI) + JaCoCo + enforcer
+mvn test      # unit tests only
+mvn package   # library + shaded JAR
 ```
 
-Coverage report: `target/site/jacoco/index.html` after `verify`.
+Coverage: `target/site/jacoco/index.html` after `verify`.
 
-### CI and releases
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): `mvn -B verify` on pushes/PRs to `main`, `master`, `develop`, `development`, and `release/**`. Tags `v*` attach both JARs to a GitHub Release.
 
-Two GitHub Actions workflows automate building, testing, and publishing:
+**Publish** ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)): tag `v*` → Maven Central; push to `development` → snapshot to GitHub Packages.
 
-#### CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
+**Optional git hooks:** `git config core.hooksPath .githooks` (on Unix, `chmod +x .githooks/pre-commit`). Pre-commit runs `mvn test`.
 
-Runs on pushes and pull requests for **`main`**, **`master`**, **`develop`**, **`development`**, and **`release/**`**:
-
-- Executes **`mvn -B verify`** (unit tests, integration tests, JaCoCo, enforcer).
-- On **`v*`** tags: verifies with `-Drevision` derived from the tag, attaches the library and shaded `-all` JARs to a **GitHub Release** with auto-generated release notes.
-- **`workflow_dispatch`** available for manual runs from the Actions tab.
-
-#### Publishing ([`.github/workflows/publish.yml`](.github/workflows/publish.yml))
-
-Automatic version-aware publishing based on branch or tag:
-
-| Trigger | Version | Target |
-|---------|---------|--------|
-| Tag `v1.2.1` | `1.2.1` | **Maven Central** (GPG-signed release) |
-| Push to `main` | `1.2.1-SNAPSHOT` | GitHub Packages |
-| Push to `development` | `1.2.1-dev.<sha>-SNAPSHOT` | GitHub Packages |
-| Push to `release/1.3` | `1.3.0-RC-SNAPSHOT` | GitHub Packages |
-
-- **Releases** are deployed to [Maven Central](https://central.sonatype.com/).
-- **Snapshots** are deployed to [GitHub Packages](https://github.com/cvs0/bytecode-processor/packages).
-
-**Consume via Maven Central** (recommended, no extra repository needed):
-
-```xml
-<dependency>
-    <groupId>io.github.cvs0</groupId>
-    <artifactId>bytecode-processor</artifactId>
-    <version>1.2.1</version>
-</dependency>
-```
-
-Shaded CLI (`-all` JAR) as a classified artifact:
-
-```xml
-<dependency>
-    <groupId>io.github.cvs0</groupId>
-    <artifactId>bytecode-processor</artifactId>
-    <version>1.2.1</version>
-    <classifier>all</classifier>
-</dependency>
-```
----
-
-## Contributing
-
-### Branch layout
-
-| Branch pattern | Purpose |
-|----------------|---------|
-| **`main`** | Default branch. Production-ready code; `<version>` in `pom.xml` matches what you intend to ship next. Merge only via pull request (reviews, CI green). |
-| **`develop`** / **`development`** | Optional integration lines (this repo runs CI on both names). Merge features here first, then merge into `main` at release time, or use **trunk-based** flow and target **`main`** only. |
-| **`release/x.y.z`** | Short-lived stabilization (e.g. `release/1.2.0`). Branch from `main` or `develop` when the version is frozen; only bugfixes and release prep; merge back to `main` (and `develop` if used), then tag. |
-| **`v1.x`** (example: `v1.1`) | **Maintenance** for an already-shipped major/minor line. Patch releases (`1.1.1`, `1.1.2`) happen here; cherry-pick or merge fixes from `main` as appropriate, bump patch version, tag `v1.1.1`, etc. |
-| **`feature/…`** | New work. Branch from `main` (or `develop` if you use it). Name briefly: `feature/deps-dot-export`, `fix/jar-writer-manifest`. |
-| **`hotfix/…`** | Urgent production fix. Branch from `main` (or from the active **`v*.*`** line if the hotfix is for that line only). |
-
-**Tags** (`v1.2.0`, …) mark immutable releases, drive CI **GitHub Release** uploads.
-
-### Quick setup (maintainer)
-
-Create the integration branch once and publish it:
-
-```bash
-git fetch origin
-git checkout main
-git pull origin main
-git branch develop main          # optional integration branch
-git push -u origin develop
-git branch development main      # optional alias (CI also watches `development`)
-git push -u origin development
-```
-
-Create a maintenance line after a major/minor release (example: supporting `1.1.x` while `main` moves to `1.2`):
-
-```bash
-git checkout -b v1.1 main       # or the tag you released from
-git push -u origin v1.1
-```
-
-Start a feature:
-
-```bash
-git checkout main && git pull
-git checkout -b feature/my-change
-# … commit …
-git push -u origin feature/my-change
-```
-
-Then open a **pull request** on GitHub into `main` (or `develop`).
-
-### Pull request checklist
-
-- `mvn verify` passes locally (or rely on CI).
-- For user-visible behavior, update **README** or CLI help if needed.
-- Keep commits focused; follow existing style (see [`.editorconfig`](.editorconfig)).
-
-### Versioning and `pom.xml`
-
-The project version is driven by the **`revision`** property and the [**flatten-maven-plugin**](https://www.mojohaus.org/flatten-maven-plugin/) (`flattenMode: resolveCiFriendliesOnly`):
-
-```xml
-<version>${revision}</version>
-<!-- in <properties>: -->
-<revision>1.2.0-SNAPSHOT</revision>
-```
-
-- **Default (`main` / `development`)**: `<revision>1.2.1-SNAPSHOT</revision>` — next development line. Override on the CLI with `-Drevision=…` when needed.
-- **Maintenance branch (`v1.1`, …)**: set `<revision>` to that line only, e.g. `1.1.1-SNAPSHOT`, until you cut a patch release.
-- **Release**: tag `v1.2.1` on `main`; the publish workflow automatically deploys to Maven Central with the version from the tag. Then bump `main` to the next SNAPSHOT (e.g. `1.3.0-SNAPSHOT`).
-- Align the Git tag with `${revision}` when cutting a release
-
-### Example plugins
-
-Reference implementations live under `io.github.cvs0.bytecode.plugin.impl`. They expose **configuration key constants** (e.g. `ObfuscationPlugin.CFG_NAME_PREFIX`, `OptimizationPlugin.CFG_REMOVE_NOPS`) and Javadoc tables describing each flag. Prefer these constants over string literals when wiring `PluginManager` / `configure(Map)`.
-
-## Architecture
-
-1. **ASM (tree)** — `ClassNode` / `MethodNode` graphs.
-2. **Program model** — `ProgramClass`, `ProgramMethod`, `ProgramField` synchronized with ASM nodes where applicable.
-3. **Analysis / transform** — graph algorithms, `ClassTransformer` scheduling, plugins.
-
----
+**Contributing:** `mvn verify` green; keep changes focused; match existing style ([`.editorconfig`](.editorconfig)). Version is `${revision}` in the POM (flattened); release tags should match the published version.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT.
