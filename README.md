@@ -52,8 +52,6 @@ Releases are on **Maven Central**. Replace `VERSION` with the latest release (se
 
 **Snapshots** (e.g. `1.2.1-SNAPSHOT`) are published to [GitHub Packages](https://github.com/cvs0/bytecode-processor/packages) on pushes to `development`. Add the `https://maven.pkg.github.com/cvs0/bytecode-processor` repository and authenticate as [GitHub documents for Packages](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry).
 
-**JitPack** is also supported: [jitpack.io/#cvs0/bytecode-processor](https://jitpack.io/#cvs0/bytecode-processor).
-
 ### IDE / modules
 
 The project uses **Lombok** (`provided`). Install the [Lombok IDE support](https://projectlombok.org/setup/) for navigation.

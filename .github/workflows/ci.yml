@@ -1,4 +1,3 @@
-# Validates every push/PR. Tag v* builds attach JARs to a GitHub Release. Maven consumers use JitPack: https://jitpack.io/#cvs0/bytecode-processor
 name: CI
 
 on:
