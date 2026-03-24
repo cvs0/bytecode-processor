@@ -126,7 +126,10 @@ public class BytecodeCli implements Runnable {
         @Option(names = "--dot", description = "Write forward dependency graph as Graphviz DOT")
         Path dotOut;
 
-        @Option(names = "--class", description = "List program classes that depend on this internal name (e.g. com/foo/Bar)")
+        @Option(
+                names = "--class",
+                description =
+                        "List program classes that depend on this type (internal form e.g. com/foo/Bar, or binary name com.foo.Bar)")
         String className;
 
         @Override
@@ -141,8 +144,9 @@ public class BytecodeCli implements Runnable {
             Set<String> cycles = DependencyAnalyzer.findCircularDependencies(mapping);
             System.out.println("Classes involved in cycles: " + cycles.size());
             if (className != null && !className.isBlank()) {
-                Set<String> dependents = DependencyAnalyzer.findDependents(mapping, className);
-                System.out.println("Dependents of " + className + ": " + dependents.size());
+                String internalQuery = normalizeInternalNameForDependencyQuery(className);
+                Set<String> dependents = DependencyAnalyzer.findDependents(mapping, internalQuery);
+                System.out.println("Dependents of " + internalQuery + ": " + dependents.size());
                 dependents.stream().sorted().limit(50).forEach(d -> System.out.println("  " + d));
                 if (dependents.size() > 50) {
                     System.out.println("  ... (" + (dependents.size() - 50) + " more)");
@@ -155,5 +159,16 @@ public class BytecodeCli implements Runnable {
             }
             return 0;
         }
+    }
+
+    /**
+     * Dependency graphs use slash-separated internal names; accept dotted binary names from the CLI as well.
+     */
+    static String normalizeInternalNameForDependencyQuery(String raw) {
+        String s = raw.trim();
+        if (!s.contains("/")) {
+            return s.replace('.', '/');
+        }
+        return s;
     }
 }
