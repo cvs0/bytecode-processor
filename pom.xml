@@ -184,6 +184,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <integrationTest.shadedJar>${project.build.directory}/${project.build.finalName}-all.jar</integrationTest.shadedJar>
+                        <integrationTest.libraryJar>${project.build.directory}/${project.build.finalName}.jar</integrationTest.libraryJar>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
