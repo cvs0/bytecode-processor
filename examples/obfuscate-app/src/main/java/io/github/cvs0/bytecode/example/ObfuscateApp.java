@@ -21,8 +21,8 @@ import java.util.stream.Stream;
  * updated when the launch class is renamed.</p>
  *
  * <p>Maven: {@code mvn exec:java "-Dexec.args=in.jar out.jar --libDir path\\to\\deps"} after installing the library.
- * Fat-JAR obfuscation smoke test: {@code mvn verify} in {@code examples/local-app/} (after {@code mvn package} at repo
- * root).</p>
+ * Runnable obfuscated JAR scenarios are covered by {@code io.github.cvs0.bytecode.ObfuscationRunnableJarIT} in the
+ * library’s test sources ({@code mvn test} at the repository root).</p>
  */
 public final class ObfuscateApp {
 

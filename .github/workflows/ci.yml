@@ -43,9 +43,6 @@ jobs:
             mvn -B verify
           fi
 
-      - name: Local Maven example (lib/bytecode-processor-local.jar from root package)
-        run: mvn -B -f examples/local-app/pom.xml verify
-
       - name: Upload JARs for GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
