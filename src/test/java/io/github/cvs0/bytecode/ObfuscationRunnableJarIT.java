@@ -19,7 +19,6 @@ import static io.github.cvs0.bytecode.ObfuscationJarHarness.assertJarSingleMarke
 import static io.github.cvs0.bytecode.ObfuscationJarHarness.javac;
 import static io.github.cvs0.bytecode.ObfuscationJarHarness.listServiceLoaderPaths;
 import static io.github.cvs0.bytecode.ObfuscationJarHarness.obfuscateAndWrite;
-import static io.github.cvs0.bytecode.ObfuscationJarHarness.writeJarClassesOnly;
 import static io.github.cvs0.bytecode.ObfuscationJarHarness.writeJarWithMain;
 import static io.github.cvs0.bytecode.ObfuscationJarHarness.writeJarWithManifest;
 import static io.github.cvs0.bytecode.ObfuscationJarHarness.writeJarWithResource;
@@ -31,8 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * End-to-end checks that {@link ObfuscationPlugin} produces {@code java -jar}-runnable outputs for common layouts:
- * thin JARs, fat JARs with merged libraries, {@link java.util.ServiceLoader}, {@code Start-Class}, and plugin
- * configuration variants.
+ * thin JARs, single JARs containing application plus library classes, {@link java.util.ServiceLoader}, {@code Start-Class},
+ * and plugin configuration variants.
  *
  * <p>Service-loader scenarios use {@link ObfuscationPlugin#CFG_OBFUSCATE_METHODS} {@code false}: the example plugin
  * renames methods per declaring class, which would desynchronize interface abstract methods from implementors.</p>
@@ -45,7 +44,7 @@ class ObfuscationRunnableJarIT {
     }
 
     @Test
-    void thinJar_singlePrimaryJar_noMerge_runsAfterObfuscation(@TempDir Path temp) throws Exception {
+    void thinJar_singlePrimaryJar_runsAfterObfuscation(@TempDir Path temp) throws Exception {
         Path app = temp.resolve("App.java");
         Files.writeString(
                 app,
@@ -102,12 +101,9 @@ class ObfuscationRunnableJarIT {
         Path classes = temp.resolve("classes");
         javac(classes, null, appJava, libJava);
         Path appJar = temp.resolve("app.jar");
-        Path libJar = temp.resolve("lib.jar");
-        writeJarWithMain(appJar, classes, "fatm.App", "fatm/App.class");
-        writeJarClassesOnly(libJar, classes, "fatm/Lib.class");
+        writeJarWithMain(appJar, classes, "fatm.App", "fatm/App.class", "fatm/Lib.class");
 
         JarMapping mapping = JarMapping.fromJar(appJar);
-        mapping.mergeClasspathJar(libJar);
         Path obf = temp.resolve("obf.jar");
         obfuscateAndWrite(mapping, obf);
 
@@ -148,12 +144,9 @@ class ObfuscationRunnableJarIT {
         Path classes = temp.resolve("classes");
         javac(classes, null, appJava, libJava);
         Path appJar = temp.resolve("app.jar");
-        Path libJar = temp.resolve("lib.jar");
-        writeJarWithMain(appJar, classes, "fatf.App", "fatf/App.class");
-        writeJarClassesOnly(libJar, classes, "fatf/Lib.class");
+        writeJarWithMain(appJar, classes, "fatf.App", "fatf/App.class", "fatf/Lib.class");
 
         JarMapping mapping = JarMapping.fromJar(appJar);
-        mapping.mergeClasspathJar(libJar);
         Path obf = temp.resolve("obf.jar");
         obfuscateAndWrite(mapping, obf);
 
@@ -205,15 +198,15 @@ class ObfuscationRunnableJarIT {
         Path classes = temp.resolve("classes");
         javac(classes, null, appJava, lib1, lib2);
         Path appJar = temp.resolve("app.jar");
-        Path j1 = temp.resolve("l1.jar");
-        Path j2 = temp.resolve("l2.jar");
-        writeJarWithMain(appJar, classes, "twolib.App", "twolib/App.class");
-        writeJarClassesOnly(j1, classes, "twolib/Lib1.class");
-        writeJarClassesOnly(j2, classes, "twolib/Lib2.class");
+        writeJarWithMain(
+                appJar,
+                classes,
+                "twolib.App",
+                "twolib/App.class",
+                "twolib/Lib1.class",
+                "twolib/Lib2.class");
 
         JarMapping mapping = JarMapping.fromJar(appJar);
-        mapping.mergeClasspathJar(j1);
-        mapping.mergeClasspathJar(j2);
         Path obf = temp.resolve("obf.jar");
         obfuscateAndWrite(mapping, obf);
 
@@ -221,7 +214,7 @@ class ObfuscationRunnableJarIT {
     }
 
     @Test
-    void fatJar_mergeSameLibraryJarTwice_doesNotDuplicateMergedEntries(@TempDir Path temp) throws Exception {
+    void fatJar_singleJar_appAndLib_runs(@TempDir Path temp) throws Exception {
         Path appJava = temp.resolve("App.java");
         Path libJava = temp.resolve("Lib.java");
         Files.writeString(
@@ -252,16 +245,9 @@ class ObfuscationRunnableJarIT {
         Path classes = temp.resolve("classes");
         javac(classes, null, appJava, libJava);
         Path appJar = temp.resolve("app.jar");
-        Path libJar = temp.resolve("lib.jar");
-        writeJarWithMain(appJar, classes, "dup.App", "dup/App.class");
-        writeJarClassesOnly(libJar, classes, "dup/Lib.class");
+        writeJarWithMain(appJar, classes, "dup.App", "dup/App.class", "dup/Lib.class");
 
         JarMapping mapping = JarMapping.fromJar(appJar);
-        mapping.mergeClasspathJar(libJar);
-        int afterFirst = mapping.getMergedEntryCount();
-        mapping.mergeClasspathJar(libJar);
-        assertEquals(afterFirst, mapping.getMergedEntryCount(), "merging the same JAR again should not add entries");
-
         Path obf = temp.resolve("obf.jar");
         obfuscateAndWrite(mapping, obf);
         assertJarSingleMarkerLine(obf, "DUP_MERGE_OK");
@@ -299,12 +285,9 @@ class ObfuscationRunnableJarIT {
         Path classes = temp.resolve("classes");
         javac(classes, null, appJava, helperJava);
         Path appJar = temp.resolve("app.jar");
-        Path libJar = temp.resolve("lib.jar");
-        writeJarWithMain(appJar, classes, "obfext.App", "obfext/App.class");
-        writeJarClassesOnly(libJar, classes, "obfext/Helper.class");
+        writeJarWithMain(appJar, classes, "obfext.App", "obfext/App.class", "obfext/Helper.class");
 
         JarMapping mapping = JarMapping.fromJar(appJar);
-        mapping.mergeClasspathJar(libJar);
         Path obf = temp.resolve("obf.jar");
         obfuscateAndWrite(mapping, obf);
 
@@ -345,12 +328,10 @@ class ObfuscationRunnableJarIT {
         Path classes = temp.resolve("classes");
         javac(classes, null, appJava, libJava);
         Path appJar = temp.resolve("app.jar");
-        Path libJar = temp.resolve("lib.jar");
-        writeJarWithMain(appJar, classes, "inn.App", "inn/App.class", "inn/App$Inner.class");
-        writeJarClassesOnly(libJar, classes, "inn/Lib.class");
+        writeJarWithMain(
+                appJar, classes, "inn.App", "inn/App.class", "inn/App$Inner.class", "inn/Lib.class");
 
         JarMapping mapping = JarMapping.fromJar(appJar);
-        mapping.mergeClasspathJar(libJar);
         Path obf = temp.resolve("obf.jar");
         obfuscateAndWrite(mapping, obf);
 
@@ -614,12 +595,9 @@ class ObfuscationRunnableJarIT {
         Path classes = temp.resolve("classes");
         javac(classes, null, appJava, libJava);
         Path appJar = temp.resolve("app.jar");
-        Path libJar = temp.resolve("lib.jar");
-        writeJarWithMain(appJar, classes, "pref.App", "pref/App.class");
-        writeJarClassesOnly(libJar, classes, "pref/Lib.class");
+        writeJarWithMain(appJar, classes, "pref.App", "pref/App.class", "pref/Lib.class");
 
         JarMapping mapping = JarMapping.fromJar(appJar);
-        mapping.mergeClasspathJar(libJar);
         Path obf = temp.resolve("obf.jar");
         obfuscateAndWrite(
                 mapping,

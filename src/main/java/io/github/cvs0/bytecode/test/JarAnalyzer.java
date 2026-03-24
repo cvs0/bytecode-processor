@@ -86,7 +86,9 @@ public class JarAnalyzer {
         System.out.println("-".repeat(40));
 
         JarStatistics s = JarStatistics.from(mapping);
-        System.out.println("Total Classes: " + s.getProgramClassCount());
+        System.out.println("Total class models: " + s.getTotalModeledClassCount());
+        System.out.println("  - Application: " + s.getApplicationClassCount());
+        System.out.println("  - Embedded libraries: " + s.getEmbeddedLibraryClassCount());
         System.out.println("  - Interfaces: " + s.getInterfaceCount());
         System.out.println("  - Abstract: " + s.getAbstractClassCount());
         System.out.println("  - Final: " + s.getFinalClassCount());

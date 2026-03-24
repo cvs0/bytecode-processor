@@ -24,8 +24,11 @@ import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 
 /**
- * Writes {@link JarMapping} to a JAR: module descriptors, package-info, program classes, merged classes, then resources.
- * The manifest resource is supplied to {@link JarOutputStream} and is not written again as a resource entry.
+ * Writes a {@link JarMapping} to a JAR: module descriptors, package-info, all program classes (each at its JAR path),
+ * then every resource except {@link JarLayout#MANIFEST} (passed to {@link JarOutputStream}).
+ *
+ * @see JarReader
+ * @see io.github.cvs0.bytecode.JarMapping#writeToJar(java.nio.file.Path)
  */
 public class JarWriter {
 
@@ -33,9 +36,6 @@ public class JarWriter {
         write(mapping, outputPath.toFile());
     }
 
-    /**
-     * Uses the mapping's {@link JarLayout#MANIFEST} resource when present and parseable; otherwise a minimal default.
-     */
     public static void write(JarMapping mapping, File outputFile) throws IOException {
         write(mapping, outputFile, resolveManifest(mapping));
     }
@@ -52,23 +52,25 @@ public class JarWriter {
         return createDefaultManifest();
     }
 
-    /**
-     * Writes with the given manifest (full control over {@code Main-Class} and other main attributes).
-     */
     public static void write(JarMapping mapping, File outputFile, Manifest manifest) throws IOException {
         Objects.requireNonNull(manifest, "manifest");
         try (FileOutputStream fos = new FileOutputStream(outputFile);
                 JarOutputStream jos = new JarOutputStream(fos, manifest)) {
-            writeClassLikeEntries(mapping, jos);
-            writeResources(mapping, jos);
+            Set<String> writtenPaths = new HashSet<>();
+            writeClassLikeEntries(mapping, jos, writtenPaths);
+            writeResources(mapping, jos, writtenPaths);
         }
     }
 
-    private static void writeResources(JarMapping mapping, JarOutputStream jos) throws IOException {
+    private static void writeResources(JarMapping mapping, JarOutputStream jos, Set<String> writtenPaths)
+            throws IOException {
         List<String> names = new ArrayList<>(mapping.getResourceNames());
         Collections.sort(names);
         for (String resourceName : names) {
             if (JarLayout.MANIFEST.equals(resourceName)) {
+                continue;
+            }
+            if (writtenPaths.contains(resourceName)) {
                 continue;
             }
             byte[] data = mapping.getResource(resourceName);
@@ -79,12 +81,11 @@ public class JarWriter {
         }
     }
 
-    private static void writeClassLikeEntries(JarMapping mapping, JarOutputStream jos) throws IOException {
-        Set<String> writtenPaths = new HashSet<>();
+    private static void writeClassLikeEntries(JarMapping mapping, JarOutputStream jos, Set<String> writtenPaths)
+            throws IOException {
         writeModuleDescriptors(mapping, jos, writtenPaths);
         writePackageInfos(mapping, jos, writtenPaths);
         writeProgramClasses(mapping, jos, writtenPaths);
-        writeMergedClasses(mapping, jos, writtenPaths);
     }
 
     private static void writeModuleDescriptors(JarMapping mapping, JarOutputStream jos, Set<String> writtenPaths)
@@ -118,25 +119,13 @@ public class JarWriter {
     private static void writeProgramClasses(JarMapping mapping, JarOutputStream jos, Set<String> writtenPaths)
             throws IOException {
         List<ProgramClass> classes = new ArrayList<>(mapping.getProgramClasses());
-        classes.sort(Comparator.comparing(ProgramClass::getName));
+        classes.sort(Comparator.comparing(ProgramClass::getJarEntryName));
         for (ProgramClass programClass : classes) {
-            String jarPath = programClass.getName() + ".class";
-            writeClassEntry(jos, programClass);
-            writtenPaths.add(jarPath);
-        }
-    }
-
-    private static void writeMergedClasses(JarMapping mapping, JarOutputStream jos, Set<String> writtenPaths)
-            throws IOException {
-        for (String mergedPath : mapping.getMergedEntryPaths()) {
-            if (writtenPaths.contains(mergedPath)) {
+            String jarPath = programClass.getJarEntryName();
+            if (!writtenPaths.add(jarPath)) {
                 continue;
             }
-            byte[] data = mapping.getMergedEntry(mergedPath);
-            if (data != null) {
-                writeRawClassEntry(jos, mergedPath, data);
-                writtenPaths.add(mergedPath);
-            }
+            writeClassEntry(jos, programClass, jarPath);
         }
     }
 
@@ -148,14 +137,13 @@ public class JarWriter {
     }
 
     static byte[] classBytesFromNode(ClassNode classNode) {
-        ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
+        ClassWriter classWriter = new SafeClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
         classNode.accept(classWriter);
         return classWriter.toByteArray();
     }
 
-    private static void writeClassEntry(JarOutputStream jos, ProgramClass programClass) throws IOException {
-        String className = programClass.getName() + ".class";
-        JarEntry entry = new JarEntry(className);
+    private static void writeClassEntry(JarOutputStream jos, ProgramClass programClass, String jarPath) throws IOException {
+        JarEntry entry = new JarEntry(jarPath);
         jos.putNextEntry(entry);
         jos.write(generateClassBytes(programClass));
         jos.closeEntry();

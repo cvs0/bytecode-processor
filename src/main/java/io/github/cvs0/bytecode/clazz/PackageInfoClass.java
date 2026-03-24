@@ -1,12 +1,16 @@
 package io.github.cvs0.bytecode.clazz;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.objectweb.asm.tree.ClassNode;
 
 import java.util.Objects;
 
 /**
- * A {@code package-info.class} entry: package-level annotations and {@code package.html} metadata, not a normal program class.
+ * A {@code package-info.class} entry from a JAR: package-level annotations and {@code package.html} metadata, not a normal program class.
  */
+@Getter
+@Setter
 public final class PackageInfoClass {
     private String jarEntryName;
     private final ClassNode classNode;
@@ -18,29 +22,9 @@ public final class PackageInfoClass {
         this.classVersion = classVersion;
     }
 
-    public String getJarEntryName() {
-        return jarEntryName;
-    }
-
-    public void setJarEntryName(String jarEntryName) {
-        this.jarEntryName = Objects.requireNonNull(jarEntryName, "jarEntryName");
-    }
-
-    public ClassNode getClassNode() {
-        return classNode;
-    }
-
     /** Internal name (e.g. {@code com/example/package-info}). */
     public String getInternalName() {
         return classNode.name != null ? classNode.name : internalNameFromJarEntry(jarEntryName);
-    }
-
-    public int getClassVersion() {
-        return classVersion;
-    }
-
-    public void setClassVersion(int classVersion) {
-        this.classVersion = classVersion;
     }
 
     private static String internalNameFromJarEntry(String entryName) {

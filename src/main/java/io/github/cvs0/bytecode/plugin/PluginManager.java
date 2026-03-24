@@ -14,8 +14,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Manages the registration, initialization, and execution of plugins for bytecode processing.
- * Supports plugin lifecycle management, prioritization, and safe concurrent access.
+ * Registers {@link Plugin} instances, runs {@link Plugin#initialize()} once, then {@link #processWithPlugins(JarMapping)}
+ * in priority order. Intended to sit between {@link io.github.cvs0.bytecode.util.JarReader} and
+ * {@link io.github.cvs0.bytecode.util.JarWriter} on a shared {@link JarMapping}.
  */
 public class PluginManager {
 

@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,7 +40,7 @@ class BytecodeCliShadedIT {
         Path shaded = shadedJar();
         Result r = run(javaExe(), "-jar", shaded.toString(), "stats", shaded.toString());
         assertEquals(0, r.exit, r::toString);
-        assertTrue(r.out.contains("Program classes:"), () -> r.out);
+        assertTrue(r.out.contains("Application classes:"), () -> r.out);
         assertTrue(r.out.contains("Methods:"), () -> r.out);
     }
 
@@ -48,7 +49,9 @@ class BytecodeCliShadedIT {
         Path shaded = shadedJar();
         Result r = run(javaExe(), "-jar", shaded.toString(), "stats", shaded.toString(), "--json");
         assertEquals(0, r.exit, r::toString);
-        assertTrue(r.out.trim().startsWith("{") && r.out.contains("\"programClasses\""), () -> r.out);
+        assertTrue(
+                r.out.trim().startsWith("{") && r.out.contains("\"applicationClasses\"") && r.out.contains("\"totalClasses\""),
+                () -> r.out);
     }
 
     @Test
@@ -89,6 +92,32 @@ class BytecodeCliShadedIT {
         Result r = run(javaExe(), "-jar", shaded.toString(), "stats", missing.toString());
         assertEquals(2, r.exit, r::toString);
         assertTrue(r.out.contains("JAR not found") || r.err.contains("JAR not found"), () -> r.toString());
+    }
+
+    @Test
+    void transform_obfuscatesCopy_ofShadedJar_thenJarLaunches(@TempDir Path temp) throws Exception {
+        Path shaded = shadedJar();
+        Path copy = temp.resolve("copy.jar");
+        Path obfuscated = temp.resolve("obfuscated.jar");
+        Files.copy(shaded, copy, StandardCopyOption.REPLACE_EXISTING);
+        Result t =
+                run(
+                        javaExe(),
+                        "-jar",
+                        shaded.toString(),
+                        "transform",
+                        "-i",
+                        copy.toString(),
+                        "-o",
+                        obfuscated.toString(),
+                        "-p",
+                        "obfuscation");
+        assertEquals(0, t.exit, t::toString);
+        assertTrue(t.out.contains("Wrote:"), () -> t.out);
+
+        Result h = run(javaExe(), "-jar", obfuscated.toString(), "--help");
+        assertEquals(0, h.exit, h::toString);
+        assertTrue(h.out.contains("transform") && h.out.contains("bytecode-processor"), () -> h.out);
     }
 
     @Test
