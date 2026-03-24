@@ -5,13 +5,12 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: write
-  packages: write
-
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -22,12 +21,12 @@ jobs:
           cache: maven
           server-id: github
           server-username: ${{ github.actor }}
-          server-password: ${{ secrets.GITHUB_TOKEN }}
+          server-password: ${{ github.token }}
 
       - name: Verify and publish to GitHub Packages
         run: |
           mvn -B verify deploy \
-            -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${{ github.repository }}
+            -DaltDeploymentRepository=github::https://maven.pkg.github.com/${{ github.repository }}
 
       - name: Resolve project version
         id: ver
