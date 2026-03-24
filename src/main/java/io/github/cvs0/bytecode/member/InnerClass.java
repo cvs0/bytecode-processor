@@ -1,12 +1,14 @@
 package io.github.cvs0.bytecode.member;
 
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import org.objectweb.asm.Opcodes;
 
 /**
  * Represents an inner class entry (JVMS InnerClasses attribute row): internal name, outer class, simple name, access.
  */
-@Data
+@Getter
+@Setter
 public class InnerClass {
     private String innerClass;
     private String outerClass;

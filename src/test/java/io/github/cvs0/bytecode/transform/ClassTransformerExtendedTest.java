@@ -203,4 +203,45 @@ class ClassTransformerExtendedTest {
         t.clearMappings();
         assertFalse(t.hasPendingWork());
     }
+
+    @Test
+    void reconcilePrunesModuleExportWhenPackageEmptiedByRename() {
+        JarMapping m = new JarMapping("x.jar");
+        m.addClass(new ProgramClass("com/stale/App"));
+
+        ClassNode modCn = new ClassNode();
+        modCn.version = Opcodes.V9;
+        modCn.access = Opcodes.ACC_MODULE;
+        modCn.name = "module-info";
+        ModuleNode module = new ModuleNode("m", 0, null);
+        modCn.module = module;
+        module.exports = new ArrayList<>();
+        module.exports.add(new ModuleExportNode("com/stale", 0, null));
+        m.addModuleInfo("module-info.class", new ModuleInfoClass("module-info.class", modCn, Opcodes.V9));
+
+        ClassTransformer t = new ClassTransformer(m);
+        t.renameClass("com/stale/App", "Main");
+        t.applyTransformations();
+
+        assertTrue(module.exports.isEmpty());
+    }
+
+    @Test
+    void reconcileRemovesOrphanPackageInfoAfterRename() {
+        JarMapping m = new JarMapping("x.jar");
+        m.addClass(new ProgramClass("com/foo/App"));
+
+        ClassNode pkgCn = new ClassNode();
+        pkgCn.version = Opcodes.V17;
+        pkgCn.access = Opcodes.ACC_SYNTHETIC | Opcodes.ACC_INTERFACE | Opcodes.ACC_ABSTRACT;
+        pkgCn.name = "com/foo/package-info";
+        pkgCn.superName = "java/lang/Object";
+        m.addPackageInfo("com/foo/package-info.class", new PackageInfoClass("com/foo/package-info.class", pkgCn, Opcodes.V17));
+
+        ClassTransformer t = new ClassTransformer(m);
+        t.renameClass("com/foo/App", "Z");
+        t.applyTransformations();
+
+        assertNull(m.getPackageInfo("com/foo/package-info.class"));
+    }
 }
