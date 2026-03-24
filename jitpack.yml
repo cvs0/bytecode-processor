@@ -1,9 +1,0 @@
-# https://docs.jitpack.io/building/ — $VERSION is the requested tag, branch, or commit.
-jdk:
-  - openjdk21
-install:
-  - |
-    case "$VERSION" in
-      v[0-9]*) mvn install -B -Drevision="${VERSION#v}";;
-      *) mvn install -B;;
-    esac
