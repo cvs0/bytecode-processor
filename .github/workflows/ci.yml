@@ -25,6 +25,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -37,9 +38,9 @@ jobs:
           server-username: ${{ github.actor }}
           server-password: ${{ github.token }}
 
-      - name: Maven verify
+      - name: Verify
         run: mvn -B verify
 
-      - name: Publish SNAPSHOT to GitHub Packages (develop / development only)
+      - name: Deploy SNAPSHOT (develop only)
         if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/development')
-        run: mvn -B deploy -DskipTests -DaltDeploymentRepository=github::https://maven.pkg.github.com/${{ github.repository }}
+        run: mvn -B deploy -DskipTests
