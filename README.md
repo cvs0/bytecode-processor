@@ -55,15 +55,23 @@ On Unix, ensure the hook is executable: `chmod +x .githooks/pre-commit`.
 
 ### Use as a Maven dependency
 
+Via [JitPack](https://jitpack.io/#cvs0/bytecode-processor) (use a Git **tag** such as `v1.2.0`, a **branch**, or a **commit** as `<version>`):
+
 ```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
 <dependency>
     <groupId>net.cvs0</groupId>
     <artifactId>bytecode-processor</artifactId>
-    <version>1.2.0</version>
+    <version>v1.2.0</version>
 </dependency>
 ```
 
-Replace `1.2.0` with the release you depend on. Released versions are published to **GitHub Packages** when you push a `v*` tag; add the `github` repository and credentials as described under [CI and releases](#ci-and-releases). For a local `mvn install` build, no extra repository is needed.
+Replace the version with a **Git tag** (e.g. `v1.2.0`), **branch name**, or **commit hash** — [JitPack](https://jitpack.io) builds this repo on demand. Add the JitPack repository and use coordinates from your `pom.xml` (`net.cvs0:bytecode-processor`). For the shaded CLI artifact, use classifier `all`. See [CI and releases](#ci-and-releases). For a local `mvn install` build, no extra repository is needed.
 
 This project uses **Lombok** (`provided` scope) for generated accessors on a few types (e.g. `AbstractPlugin`, `InnerClass`). Install the [Lombok plugin](https://projectlombok.org/setup/) for your IDE so code navigation and completion stay accurate.
 
@@ -212,19 +220,39 @@ Coverage report: `target/site/jacoco/index.html` after `verify`.
 
 ### CI and releases
 
-- **GitHub Actions**: on pushes and pull requests targeting **`main`**, **`master`**, **`develop`**, **`development`**, **`release/**`**, or version lines **`v*`** (e.g. `v1.1`), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs **`mvn -B verify`**. You can also run that workflow manually from the Actions tab (**workflow dispatch**). Pushes to **`develop`** or **`development`** additionally run **`mvn deploy`** (after a successful verify) and publish a **SNAPSHOT** to [**GitHub Packages**](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry) using the same `github` server id as releases.
-- **Releases**: after updating `<version>` in `pom.xml`, create and push a tag (e.g. `git tag -a v1.2.0 -m "1.2.0"` then `git push origin v1.2.0`). [`.github/workflows/release.yml`](.github/workflows/release.yml) runs **`mvn verify deploy`**, publishes **`net.cvs0:bytecode-processor`** (main JAR, POM, and the **`all`** shaded classifier) to [**GitHub Packages**](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry), and uploads both JARs to a GitHub Release for that tag.
+- **GitHub Actions** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): on pushes and pull requests for **`main`**, **`master`**, **`develop`**, **`development`**, and **`release/**`**, runs **`mvn -B verify`**. Pushes of a **`v*`** tag run verify with **`-Drevision`** derived from the tag (no leading `v`) and attach the library and **`-all`** shaded JARs to a **GitHub Release**. Use **workflow_dispatch** in the Actions tab for a manual run (same verify logic; no release upload unless the ref is a `v*` tag).
+- **Maven / Gradle consumers**: artifacts are **not** deployed from CI to a custom registry. Use [**JitPack**](https://jitpack.io) against this GitHub repo (`cvs0/bytecode-processor`). Configuration lives in [`jitpack.yml`](jitpack.yml) (JDK 21, full **`mvn install`** including tests); version tags like `v1.2.0` map to `-Drevision=1.2.0` during the JitPack build.
 
-**Consume the artifact from GitHub Packages** (Maven requires authentication to this registry even for public repos):
+[![JitPack](https://jitpack.io/v/cvs0/bytecode-processor.svg)](https://jitpack.io/#cvs0/bytecode-processor)
+
+**Consume via JitPack** (no authentication for public GitHub repos):
 
 ```xml
 <repositories>
     <repository>
-        <id>github</id>
-        <url>https://maven.pkg.github.com/cvs0/bytecode-processor</url>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
     </repository>
 </repositories>
+<dependency>
+    <groupId>net.cvs0</groupId>
+    <artifactId>bytecode-processor</artifactId>
+    <version>v1.2.0</version>
+</dependency>
 ```
+
+Shaded CLI (`-all` JAR) as a classified artifact:
+
+```xml
+<dependency>
+    <groupId>net.cvs0</groupId>
+    <artifactId>bytecode-processor</artifactId>
+    <version>v1.2.0</version>
+    <classifier>all</classifier>
+</dependency>
+```
+
+Use a **commit hash** or **branch name** as `<version>` for snapshots-style consumption; see [JitPack versioning](https://docs.jitpack.io/).
 
 ---
 
@@ -241,7 +269,7 @@ Coverage report: `target/site/jacoco/index.html` after `verify`.
 | **`feature/…`** | New work. Branch from `main` (or `develop` if you use it). Name briefly: `feature/deps-dot-export`, `fix/jar-writer-manifest`. |
 | **`hotfix/…`** | Urgent production fix. Branch from `main` (or from the active **`v*.*`** line if the hotfix is for that line only). |
 
-**Tags** (`v1.2.0`, …) mark immutable releases and drive [`.github/workflows/release.yml`](.github/workflows/release.yml) (GitHub Release + Packages). Do not rewrite published tags.
+**Tags** (`v1.2.0`, …) mark immutable releases, drive CI **GitHub Release** uploads, and are the usual **JitPack** version selectors. Do not rewrite published tags.
 
 ### Quick setup (maintainer)
 
@@ -294,7 +322,7 @@ The project version is driven by the **`revision`** property and the [**flatten-
 - **Default (`main` / `development`)**: `<revision>1.2.0-SNAPSHOT</revision>` — next minor development line. Override on the CLI with `-Drevision=…` when needed.
 - **Maintenance branch (`v1.1`, …)**: set `<revision>` to that line only, e.g. `1.1.1-SNAPSHOT`, until you cut a patch release.
 - **Release commit**: drop `-SNAPSHOT` (e.g. `1.2.0`), tag `v1.2.0`, then bump `main` to the next SNAPSHOT (e.g. `1.3.0-SNAPSHOT`) on the branch that continues development.
-- Align the Git tag with the published Maven version (the release workflow resolves `${revision}` the same way as a local `mvn verify`).
+- Align the Git tag with `${revision}` when cutting a release (CI and JitPack use `-Drevision` stripped from `v*` tags; see [`jitpack.yml`](jitpack.yml)).
 
 ### Example plugins
 
