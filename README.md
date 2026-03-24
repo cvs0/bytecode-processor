@@ -61,25 +61,25 @@ On Unix, ensure the hook is executable: `chmod +x .githooks/pre-commit`.
 <dependency>
     <groupId>io.github.cvs0</groupId>
     <artifactId>bytecode-processor</artifactId>
-    <version>1.2.0</version>
+    <version>1.2.1</version>
 </dependency>
 ```
 
-No extra repository configuration needed — Maven Central is the default.
+No extra repository configuration needed, Maven Central is the default.
 
-**Alternatively via [JitPack](https://jitpack.io/#cvs0/bytecode-processor)** (use a Git **tag** such as `v1.2.0`, a **branch**, or a **commit** as `<version>`):
+**Snapshot builds** are published to [GitHub Packages](https://github.com/cvs0/bytecode-processor/packages) on every push to `main`, `development`, and `release/*` branches:
 
 ```xml
 <repositories>
     <repository>
-        <id>jitpack.io</id>
-        <url>https://jitpack.io</url>
+        <id>github</id>
+        <url>https://maven.pkg.github.com/cvs0/bytecode-processor</url>
     </repository>
 </repositories>
 <dependency>
-    <groupId>com.github.cvs0</groupId>
+    <groupId>io.github.cvs0</groupId>
     <artifactId>bytecode-processor</artifactId>
-    <version>v1.2.0</version>
+    <version>1.2.1-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -232,24 +232,37 @@ Coverage report: `target/site/jacoco/index.html` after `verify`.
 
 ### CI and releases
 
-- **GitHub Actions** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): on pushes and pull requests for **`main`**, **`master`**, **`develop`**, **`development`**, and **`release/**`**, runs **`mvn -B verify`**. Pushes of a **`v*`** tag run verify with **`-Drevision`** derived from the tag (no leading `v`) and attach the library and **`-all`** shaded JARs to a **GitHub Release**. Use **workflow_dispatch** in the Actions tab for a manual run (same verify logic; no release upload unless the ref is a `v*` tag).
-- **Maven / Gradle consumers**: artifacts are **not** deployed from CI to a custom registry. Use [**JitPack**](https://jitpack.io) against this GitHub repo (`cvs0/bytecode-processor`). Configuration lives in [`jitpack.yml`](jitpack.yml) (JDK 21, full **`mvn install`** including tests); version tags like `v1.2.0` map to `-Drevision=1.2.0` during the JitPack build.
+Two GitHub Actions workflows automate building, testing, and publishing:
 
-[![JitPack](https://jitpack.io/v/cvs0/bytecode-processor.svg)](https://jitpack.io/#cvs0/bytecode-processor)
+#### CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
 
-**Consume via JitPack** (no authentication for public GitHub repos):
+Runs on pushes and pull requests for **`main`**, **`master`**, **`develop`**, **`development`**, and **`release/**`**:
+
+- Executes **`mvn -B verify`** (unit tests, integration tests, JaCoCo, enforcer).
+- On **`v*`** tags: verifies with `-Drevision` derived from the tag, attaches the library and shaded `-all` JARs to a **GitHub Release** with auto-generated release notes.
+- **`workflow_dispatch`** available for manual runs from the Actions tab.
+
+#### Publishing ([`.github/workflows/publish.yml`](.github/workflows/publish.yml))
+
+Automatic version-aware publishing based on branch or tag:
+
+| Trigger | Version | Target |
+|---------|---------|--------|
+| Tag `v1.2.1` | `1.2.1` | **Maven Central** (GPG-signed release) |
+| Push to `main` | `1.2.1-SNAPSHOT` | GitHub Packages |
+| Push to `development` | `1.2.1-dev.<sha>-SNAPSHOT` | GitHub Packages |
+| Push to `release/1.3` | `1.3.0-RC-SNAPSHOT` | GitHub Packages |
+
+- **Releases** are deployed to [Maven Central](https://central.sonatype.com/).
+- **Snapshots** are deployed to [GitHub Packages](https://github.com/cvs0/bytecode-processor/packages).
+
+**Consume via Maven Central** (recommended, no extra repository needed):
 
 ```xml
-<repositories>
-    <repository>
-        <id>jitpack.io</id>
-        <url>https://jitpack.io</url>
-    </repository>
-</repositories>
 <dependency>
-    <groupId>com.github.cvs0</groupId>
+    <groupId>io.github.cvs0</groupId>
     <artifactId>bytecode-processor</artifactId>
-    <version>v1.2.0</version>
+    <version>1.2.1</version>
 </dependency>
 ```
 
@@ -257,15 +270,12 @@ Shaded CLI (`-all` JAR) as a classified artifact:
 
 ```xml
 <dependency>
-    <groupId>com.github.cvs0</groupId>
+    <groupId>io.github.cvs0</groupId>
     <artifactId>bytecode-processor</artifactId>
-    <version>v1.2.0</version>
+    <version>1.2.1</version>
     <classifier>all</classifier>
 </dependency>
 ```
-
-Use a **commit hash** or **branch name** as `<version>` for snapshots-style consumption; see [JitPack versioning](https://docs.jitpack.io/).
-
 ---
 
 ## Contributing
@@ -281,7 +291,7 @@ Use a **commit hash** or **branch name** as `<version>` for snapshots-style cons
 | **`feature/…`** | New work. Branch from `main` (or `develop` if you use it). Name briefly: `feature/deps-dot-export`, `fix/jar-writer-manifest`. |
 | **`hotfix/…`** | Urgent production fix. Branch from `main` (or from the active **`v*.*`** line if the hotfix is for that line only). |
 
-**Tags** (`v1.2.0`, …) mark immutable releases, drive CI **GitHub Release** uploads, and are the usual **JitPack** version selectors. Do not rewrite published tags.
+**Tags** (`v1.2.0`, …) mark immutable releases, drive CI **GitHub Release** uploads.
 
 ### Quick setup (maintainer)
 
@@ -331,10 +341,10 @@ The project version is driven by the **`revision`** property and the [**flatten-
 <revision>1.2.0-SNAPSHOT</revision>
 ```
 
-- **Default (`main` / `development`)**: `<revision>1.2.0-SNAPSHOT</revision>` — next minor development line. Override on the CLI with `-Drevision=…` when needed.
+- **Default (`main` / `development`)**: `<revision>1.2.1-SNAPSHOT</revision>` — next development line. Override on the CLI with `-Drevision=…` when needed.
 - **Maintenance branch (`v1.1`, …)**: set `<revision>` to that line only, e.g. `1.1.1-SNAPSHOT`, until you cut a patch release.
-- **Release commit**: drop `-SNAPSHOT` (e.g. `1.2.0`), tag `v1.2.0`, then bump `main` to the next SNAPSHOT (e.g. `1.3.0-SNAPSHOT`) on the branch that continues development.
-- Align the Git tag with `${revision}` when cutting a release (CI and JitPack use `-Drevision` stripped from `v*` tags; see [`jitpack.yml`](jitpack.yml)).
+- **Release**: tag `v1.2.1` on `main`; the publish workflow automatically deploys to Maven Central with the version from the tag. Then bump `main` to the next SNAPSHOT (e.g. `1.3.0-SNAPSHOT`).
+- Align the Git tag with `${revision}` when cutting a release
 
 ### Example plugins
 
