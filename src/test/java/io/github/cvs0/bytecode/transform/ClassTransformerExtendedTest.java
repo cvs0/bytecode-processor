@@ -10,6 +10,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.ModuleExportNode;
 import org.objectweb.asm.tree.ModuleNode;
+import org.objectweb.asm.tree.ModuleProvideNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
@@ -17,6 +18,7 @@ import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -71,6 +73,37 @@ class ClassTransformerExtendedTest {
         assertEquals("com/ren/package-info", pi.getInternalName());
 
         assertEquals("com/ren", modCn.module.exports.getFirst().packaze);
+    }
+
+    @Test
+    void renameClassUpdatesModuleMainClassUsesAndProvides() {
+        JarMapping m = new JarMapping("x.jar");
+        m.addClass(new ProgramClass("com/old/App"));
+        m.addClass(new ProgramClass("com/old/Impl"));
+
+        ClassNode modCn = new ClassNode();
+        modCn.version = Opcodes.V9;
+        modCn.access = Opcodes.ACC_MODULE;
+        modCn.name = "module-info";
+        ModuleNode module = new ModuleNode("m", 0, null);
+        modCn.module = module;
+        module.mainClass = "com/old/App";
+        module.uses = new ArrayList<>(List.of("com/old/Svc"));
+        module.provides = new ArrayList<>();
+        module.provides.add(new ModuleProvideNode("com/old/Svc", new ArrayList<>(List.of("com/old/Impl"))));
+        m.addModuleInfo("module-info.class", new ModuleInfoClass("module-info.class", modCn, Opcodes.V9));
+
+        ClassTransformer t = new ClassTransformer(m);
+        t.renameClass("com/old/App", "com/new/App");
+        t.renameClass("com/old/Svc", "com/new/Svc");
+        t.renameClass("com/old/Impl", "com/new/Impl");
+        t.applyTransformations();
+
+        ModuleNode out = modCn.module;
+        assertEquals("com/new/App", out.mainClass);
+        assertEquals("com/new/Svc", out.uses.getFirst());
+        assertEquals("com/new/Svc", out.provides.getFirst().service);
+        assertEquals("com/new/Impl", out.provides.getFirst().providers.getFirst());
     }
 
     @Test
