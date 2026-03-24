@@ -6,22 +6,27 @@ import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
+import io.github.cvs0.bytecode.util.BytecodeNames;
 import io.github.cvs0.bytecode.util.BytecodeTraversal;
+import io.github.cvs0.bytecode.util.JarGraphMetadataReconciler;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.LineNumberNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.ModuleExportNode;
 import org.objectweb.asm.tree.ModuleNode;
 import org.objectweb.asm.tree.ModuleOpenNode;
 import org.objectweb.asm.tree.ModuleProvideNode;
 import org.objectweb.asm.tree.MultiANewArrayInsnNode;
+import org.objectweb.asm.tree.RecordComponentNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
 import java.util.ArrayList;
@@ -30,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
@@ -46,10 +52,12 @@ import java.util.function.UnaryOperator;
  *   <li>Scheduled field renames, then method renames, then class renames</li>
  *   <li>Reference propagation (owners, descriptors, signatures, invokedynamic, etc.)</li>
  *   <li>Post tasks ({@link #transformStringConstants}, {@link #transformLdcConstants}, {@link #transformInstructions}, resources, {@link #visitMethodsAfterReferences}, …)</li>
+ *   <li>{@link io.github.cvs0.bytecode.util.JarGraphMetadataReconciler#reconcile(io.github.cvs0.bytecode.JarMapping)}: drop orphan {@code package-info} and prune stale {@code module-info} export/open/package entries</li>
  * </ol>
  *
  * <p>APIs such as {@link #renamePackage}, {@link #renameClassesMatching}, and {@link #renameClass} enqueue renames; use internal names
- * (e.g. {@code com/foo/Bar}) consistent with the mapping at the time you call {@code applyTransformations()}.
+ * (e.g. {@code com/foo/Bar}) consistent with the mapping at the time you call {@code applyTransformations()}, per
+ * {@link io.github.cvs0.bytecode.util.BytecodeNames}.</p>
  */
 public class ClassTransformer {
     /** The JarMapping to operate on. */
@@ -507,11 +515,56 @@ public class ClassTransformer {
      */
     public void applyTransformations() {
         runStructuralTasks();
+        sanitizeClassRenamesBeforeApply();
+        filterMemberRenamesAgainstPolicy();
         applyFieldRenames();
         applyMethodRenames();
         applyClassRenames();
         updateReferences();
         runPostReferenceTasks();
+        JarGraphMetadataReconciler.reconcile(mapping);
+    }
+
+    /**
+     * Drops unsafe class renames for JVM runtime types (if ever queued). Launch classes ({@code Main-Class},
+     * {@code Start-Class}, etc.) are renamed with the rest; {@link io.github.cvs0.bytecode.JarMapping#remapManifestMainClass}
+     * rewrites the manifest.
+     */
+    private void sanitizeClassRenamesBeforeApply() {
+        if (classNameMappings.isEmpty()) {
+            return;
+        }
+        classNameMappings.entrySet().removeIf(e -> BytecodeNames.isJvmRuntimeType(e.getKey()));
+    }
+
+    /**
+     * Removes scheduled field/method renames for JVM types, types used as annotation class literals, and high fan-in
+     * hubs so bytecode and reflection-heavy code stay consistent without package allowlists.
+     */
+    private void filterMemberRenamesAgainstPolicy() {
+        if (fieldNameMappings.isEmpty() && methodNameMappings.isEmpty()) {
+            return;
+        }
+        Map<String, Integer> fanIn = ProgramTypeReferenceFanIn.distinctReferrerCountPerOwner(mapping);
+        Set<String> annProt = AnnotationReferencedProgramTypes.typesUsedAsAnnotationClassLiterals(mapping);
+        fieldNameMappings.entrySet().removeIf(e -> {
+            String key = e.getKey();
+            int lastDot = key.lastIndexOf('.');
+            if (lastDot <= 0) {
+                return true;
+            }
+            String owner = key.substring(0, lastDot);
+            return !MemberRenamePolicy.allowMemberRenamesOnType(owner, fanIn, annProt);
+        });
+        methodNameMappings.entrySet().removeIf(e -> {
+            String key = e.getKey();
+            int lastDot = key.lastIndexOf('.');
+            if (lastDot <= 0) {
+                return true;
+            }
+            String owner = key.substring(0, lastDot);
+            return !MemberRenamePolicy.allowMemberRenamesOnType(owner, fanIn, annProt);
+        });
     }
 
     private void runStructuralTasks() {
@@ -716,7 +769,81 @@ public class ClassTransformer {
             for (ProgramMethod method : clazz.getMethods()) {
                 remapInstructionDescriptors(method);
             }
+            remapAnnotationsOnClass(clazz);
         }
+    }
+
+    private void remapAnnotationsOnClass(ProgramClass clazz) {
+        ClassNode cn = clazz.getClassNode();
+        if (cn == null) {
+            return;
+        }
+        remapAnnotationList(cn.visibleAnnotations);
+        remapAnnotationList(cn.invisibleAnnotations);
+        if (cn.fields != null) {
+            for (FieldNode f : cn.fields) {
+                remapAnnotationList(f.visibleAnnotations);
+                remapAnnotationList(f.invisibleAnnotations);
+            }
+        }
+        if (cn.methods != null) {
+            for (MethodNode m : cn.methods) {
+                remapAnnotationList(m.visibleAnnotations);
+                remapAnnotationList(m.invisibleAnnotations);
+            }
+        }
+        if (cn.recordComponents != null) {
+            for (RecordComponentNode r : cn.recordComponents) {
+                remapAnnotationList(r.visibleAnnotations);
+                remapAnnotationList(r.invisibleAnnotations);
+            }
+        }
+    }
+
+    private void remapAnnotationList(List<AnnotationNode> list) {
+        if (list == null) {
+            return;
+        }
+        for (AnnotationNode an : list) {
+            remapAnnotationNode(an);
+        }
+    }
+
+    private void remapAnnotationNode(AnnotationNode an) {
+        if (an == null || an.values == null) {
+            return;
+        }
+        for (int i = 1; i < an.values.size(); i += 2) {
+            an.values.set(i, remapAnnotationValue(an.values.get(i)));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object remapAnnotationValue(Object v) {
+        if (v instanceof Type t) {
+            return remapTypeConstant(t);
+        }
+        if (v instanceof String[] arr && arr.length >= 2 && arr[0] != null) {
+            String nd = DescriptorRemapper.remap(arr[0], classNameMappings);
+            if (!nd.equals(arr[0])) {
+                String[] copy = arr.clone();
+                copy[0] = nd;
+                return copy;
+            }
+            return v;
+        }
+        if (v instanceof AnnotationNode nested) {
+            remapAnnotationNode(nested);
+            return v;
+        }
+        if (v instanceof List<?> list) {
+            List<Object> lo = (List<Object>) list;
+            for (int i = 0; i < lo.size(); i++) {
+                lo.set(i, remapAnnotationValue(lo.get(i)));
+            }
+            return v;
+        }
+        return v;
     }
 
     /**

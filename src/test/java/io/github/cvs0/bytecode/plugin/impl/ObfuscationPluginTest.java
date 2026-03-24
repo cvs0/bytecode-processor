@@ -4,13 +4,20 @@ import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
+import io.github.cvs0.bytecode.util.BytecodeNames;
+import io.github.cvs0.bytecode.util.JarLayout;
 import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayInputStream;
+import java.util.jar.Attributes;
+import java.util.jar.Manifest;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,18 +52,28 @@ class ObfuscationPluginTest {
     }
 
     @Test
-    void skipsRenamingClassNamedMain() {
+    void manifestMainClassUpdatedWhenLaunchClassRenamed() throws Exception {
         JarMapping m = new JarMapping("t.jar");
         ProgramClass c = new ProgramClass("com/example/Main");
         c.addMethod(new ProgramMethod("run", "()V", Opcodes.ACC_PUBLIC));
         m.addClass(c);
+        m.addResource(
+                JarLayout.MANIFEST,
+                "Manifest-Version: 1.0\nMain-Class: com.example.Main\n\n".getBytes(StandardCharsets.UTF_8));
 
         ObfuscationPlugin p = new ObfuscationPlugin();
         p.configure(Map.of(ObfuscationPlugin.CFG_NAME_PREFIX, "z"));
         p.initialize();
         p.process(m);
 
-        assertNotNull(m.getProgramClass("com/example/Main"));
+        assertNull(m.getProgramClass("com/example/Main"));
+        byte[] raw = m.getResource(JarLayout.MANIFEST);
+        assertNotNull(raw);
+        Manifest mf = new Manifest(new ByteArrayInputStream(raw));
+        String mc = mf.getMainAttributes().getValue(Attributes.Name.MAIN_CLASS);
+        assertNotNull(mc);
+        assertNotEquals("com.example.Main", mc);
+        assertNotNull(m.getProgramClass(BytecodeNames.binaryToInternal(mc)));
     }
 
     @Test

@@ -3,7 +3,7 @@
 | Directory | What it is |
 |-----------|------------|
 | **demo-app/** | Maven app that loads a JAR and prints {@code JarStatistics}. Resolves the library from Maven Central or your local repo after {@code mvn install}. |
-| **obfuscate-app/** | Maven driver for {@code ObfuscateApp}: obfuscate any {@code input.jar} into a runnable fat {@code output.jar} by passing {@code --lib} / {@code --libDir} for every runtime dependency (same set you would put on {@code java -cp}). The plugin rewrites merged library bytecode so it still calls your renamed classes, and patches {@code Main-Class}, {@code Start-Class}, and {@code META-INF/services/*} when those name program classes. |
+| **obfuscate-app/** | Maven driver for {@code ObfuscateApp}: obfuscate an {@code input.jar} into {@code output.jar}. Put application and dependency classes in one JAR (shaded/uber JAR) when you need a self-contained runnable; the plugin patches {@code Main-Class}, {@code Start-Class}, and {@code META-INF/services/*} when those name program classes. |
 
 ## Obfuscating an external application JAR
 

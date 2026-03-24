@@ -6,6 +6,8 @@ import java.util.Objects;
 
 /**
  * Rewrites {@code META-INF/services/*} lines when a service implementation class was renamed.
+ *
+ * @see io.github.cvs0.bytecode.JarMapping#remapServiceLoaderImplementations(java.util.Map)
  */
 public final class ServiceLoaderResourcePatcher {
 

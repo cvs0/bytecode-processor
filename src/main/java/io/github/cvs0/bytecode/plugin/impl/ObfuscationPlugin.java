@@ -9,18 +9,23 @@ import io.github.cvs0.bytecode.transform.ClassTransformer;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * <p>Example plugin: renames program classes, methods, and fields to opaque identifiers and applies
  * {@link ClassTransformer} once at the end. Program classes are visited in sorted name order so naming is stable
- * across runs. After transforms, merged classpath bytecode (from {@link io.github.cvs0.bytecode.JarMapping#mergeClasspathJar})
- * is rewritten so dependencies still reference renamed types; {@code META-INF/services/*} paths and provider lines plus
+ * across runs. All {@link io.github.cvs0.bytecode.clazz.ProgramClass} bytecode is updated by the transformer; {@code META-INF/services/*} paths and provider lines plus
  * manifest launch attributes ({@code Main-Class}, {@code Start-Class}, etc.) are updated when possible.
  * For modular JARs, {@code module-info} {@code uses}, {@code provides}, and modular {@code mainClass} strings are
- * remapped with renamed types; export/open <em>package</em> lists are not adjusted when the obfuscated layout no
- * longer matches those packages (use {@link io.github.cvs0.bytecode.transform.ClassTransformer#renamePackage} for
- * coherent package moves).</p>
+ * remapped with renamed types. Stale {@code exports}, {@code opens}, and {@code packages} entries (and orphan
+ * {@code package-info} files) are pruned after transforms when no program class remains in that package.</p>
+ *
+ * <p>Unsafe renames (manifest entry classes, JVM runtime types, annotation class literals, high fan-in types, etc.)
+ * are filtered inside {@link ClassTransformer}, not by naming specific third-party packages here.</p>
  *
  * <p><b>Configuration keys</b> (via {@link io.github.cvs0.bytecode.plugin.ConfigurablePlugin#configure})</p>
  * <table border="1" summary="ObfuscationPlugin configuration">
@@ -37,10 +42,6 @@ public class ObfuscationPlugin extends AbstractPlugin {
     public static final String CFG_OBFUSCATE_METHODS = "obfuscateMethods";
     public static final String CFG_OBFUSCATE_FIELDS = "obfuscateFields";
     public static final String CFG_NAME_PREFIX = "namePrefix";
-
-    private static final String[] JDK_PREFIXES = {
-            "java/", "javax/", "jdk/", "sun/", "com/sun/", "org/w3c/", "org/xml/"
-    };
 
     private int nameCounter;
 
@@ -65,15 +66,25 @@ public class ObfuscationPlugin extends AbstractPlugin {
 
         ClassTransformer transformer = new ClassTransformer(mapping);
 
-        List<ProgramClass> classes = new ArrayList<>(mapping.getProgramClasses());
-        classes.sort(Comparator.comparing(ProgramClass::getName));
+        List<ProgramClass> classes = new ArrayList<>(mapping.getApplicationClasses());
+        classes.sort(Comparator.comparing(ProgramClass::getJarEntryName));
+        Map<ProgramClass, String> originalInternalName = new IdentityHashMap<>();
+        for (ProgramClass c : classes) {
+            originalInternalName.put(c, c.getName());
+        }
+
+        if (obfuscateClasses) {
+            Set<String> classRenameScheduled = new HashSet<>();
+            for (ProgramClass clazz : classes) {
+                String on = originalInternalName.get(clazz);
+                if (classRenameScheduled.add(on)) {
+                    transformer.renameClass(on, nextName());
+                }
+            }
+        }
 
         for (ProgramClass clazz : classes) {
             String className = clazz.getName();
-
-            if (obfuscateClasses && shouldObfuscateClass(className)) {
-                transformer.renameClass(className, nextName());
-            }
 
             if (obfuscateFields) {
                 for (ProgramField field : clazz.getFields()) {
@@ -93,10 +104,6 @@ public class ObfuscationPlugin extends AbstractPlugin {
         }
 
         transformer.applyTransformations();
-        mapping.remapMergedClasspathBytecode(
-                transformer.getClassNameMappings(),
-                transformer.getFieldNameMappings(),
-                transformer.getMethodNameMappings());
         mapping.remapServiceLoaderResourcePaths(transformer.getClassNameMappings());
         mapping.remapServiceLoaderImplementations(transformer.getClassNameMappings());
         mapping.remapManifestMainClass(transformer.getClassNameMappings());
@@ -105,17 +112,6 @@ public class ObfuscationPlugin extends AbstractPlugin {
     private String nextName() {
         String prefix = getStringConfig(CFG_NAME_PREFIX, "a");
         return prefix + (nameCounter++);
-    }
-
-    private static boolean shouldObfuscateClass(String internalName) {
-        for (String p : JDK_PREFIXES) {
-            if (internalName.startsWith(p)) {
-                return false;
-            }
-        }
-        int slash = internalName.lastIndexOf('/');
-        String simple = slash < 0 ? internalName : internalName.substring(slash + 1);
-        return !simple.equals("Main");
     }
 
     private static boolean shouldObfuscateMethod(ProgramMethod method) {

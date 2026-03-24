@@ -13,10 +13,13 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Represents a program (internal) class, including its name, superclass, interfaces, fields, methods, attributes, and inner classes.
- * Provides methods for querying and modifying class structure, metadata, and ASM ClassNode integration.
+ * One {@code .class} entry from a JAR (or similar), with full bytecode via {@link ClassNode} when loaded from disk.
+ * {@linkplain #isEmbeddedLibrary() Embedded library} types are shaded dependencies; application types are the host project.
+ * Both are modeled the same way so the API can inspect or transform bytecode uniformly.
  */
 public class ProgramClass {
+    /** JAR entry path for this class (e.g. {@code com/foo/Bar.class} or a multi-release path). */
+    private String jarEntryName;
     private String name;
     private String superName;
     private List<String> interfaces;
@@ -42,11 +45,18 @@ public class ProgramClass {
     private List<String> permittedSubclasses = new ArrayList<>();
 
     /**
+     * {@code true} when {@link io.github.cvs0.bytecode.util.JarLibraryClassifier} marked this as shaded third-party code
+     * (not the application root inferred from manifest / module main class).
+     */
+    private boolean embeddedLibrary;
+
+    /**
      * Constructs a ProgramClass with the given name.
      * @param name the class name
      */
     public ProgramClass(String name) {
         this.name = name;
+        this.jarEntryName = name + ".class";
         this.interfaces = new ArrayList<>();
     }
 
@@ -57,6 +67,7 @@ public class ProgramClass {
     public ProgramClass(ClassNode classNode) {
         this.classNode = classNode;
         this.name = classNode.name;
+        this.jarEntryName = classNode.name != null ? classNode.name + ".class" : null;
         this.superName = classNode.superName;
         this.interfaces = new ArrayList<>(classNode.interfaces);
         this.access = classNode.access;
@@ -278,6 +289,30 @@ public class ProgramClass {
      * Gets the class name.
      * @return the class name
      */
+    /**
+     * JAR path for this class when writing (defaults to {@code getName() + ".class"}).
+     */
+    public String getJarEntryName() {
+        return jarEntryName != null ? jarEntryName : (name != null ? name + ".class" : null);
+    }
+
+    public void setJarEntryName(String jarEntryName) {
+        this.jarEntryName = Objects.requireNonNull(jarEntryName, "jarEntryName");
+    }
+
+    /**
+     * Updates {@link #jarEntryName} after an internal rename when the path ends with {@code oldInternalName + ".class"}.
+     */
+    public void remapJarEntryPath(String oldInternalName, String newInternalName) {
+        Objects.requireNonNull(oldInternalName, "oldInternalName");
+        Objects.requireNonNull(newInternalName, "newInternalName");
+        String path = jarEntryName != null ? jarEntryName : oldInternalName + ".class";
+        String oldSuffix = oldInternalName + ".class";
+        if (path.endsWith(oldSuffix)) {
+            this.jarEntryName = path.substring(0, path.length() - oldSuffix.length()) + newInternalName + ".class";
+        }
+    }
+
     public String getName() {
         return name;
     }
@@ -611,6 +646,14 @@ public class ProgramClass {
         if (classNode != null) {
             classNode.version = classVersion;
         }
+    }
+
+    public boolean isEmbeddedLibrary() {
+        return embeddedLibrary;
+    }
+
+    public void setEmbeddedLibrary(boolean embeddedLibrary) {
+        this.embeddedLibrary = embeddedLibrary;
     }
 
     /**

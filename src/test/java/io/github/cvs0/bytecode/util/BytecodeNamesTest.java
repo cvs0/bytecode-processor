@@ -18,4 +18,11 @@ class BytecodeNamesTest {
         assertEquals("m/X", BytecodeNames.classFilePathToInternal("m/X.class"));
         assertNull(BytecodeNames.classFilePathToInternal("readme.txt"));
     }
+
+    @Test
+    void internalNameToPackage() {
+        assertEquals("", BytecodeNames.internalNameToPackage("Main"));
+        assertEquals("com/foo", BytecodeNames.internalNameToPackage("com/foo/Bar"));
+        assertEquals("com/foo", BytecodeNames.internalNameToPackage("com/foo/package-info"));
+    }
 }
