@@ -9,8 +9,9 @@ import java.util.Objects;
 import java.util.function.BiConsumer;
 
 /**
- * Walks program classes and methods, including classes that only have a backing {@link org.objectweb.asm.tree.ClassNode}
- * (e.g. {@code module-info} / {@code package-info} loaded without {@link ProgramMethod} entries in the map).
+ * Walks {@linkplain net.cvs0.bytecode.JarMapping#getProgramClasses() program classes} and their methods, including
+ * classes that only have instructions on the backing {@link org.objectweb.asm.tree.ClassNode} when the
+ * {@link net.cvs0.bytecode.member.ProgramMethod} map is empty.
  */
 public final class BytecodeTraversal {
 

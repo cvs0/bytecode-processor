@@ -21,7 +21,7 @@ import java.util.concurrent.Callable;
 @Command(
         name = "bytecode-processor",
         mixinStandardHelpOptions = true,
-        version = "Bytecode Processor 1.1",
+        versionProvider = BytecodeCli.CliVersionProvider.class,
         description = "Analyze Java JAR files (dependencies, statistics, Graphviz export).",
         subcommands = {
                 BytecodeCli.AnalyzeCommand.class,
@@ -29,6 +29,18 @@ import java.util.concurrent.Callable;
                 BytecodeCli.DepsCommand.class
         })
 public class BytecodeCli implements Runnable {
+
+    /**
+     * Resolves {@code Implementation-Version} from the JAR manifest (set by Maven for packaged builds).
+     */
+    static final class CliVersionProvider implements CommandLine.IVersionProvider {
+        @Override
+        public String[] getVersion() {
+            Package p = BytecodeCli.class.getPackage();
+            String v = p != null ? p.getImplementationVersion() : null;
+            return new String[] {"Bytecode Processor " + (v != null ? v : "dev-SNAPSHOT")};
+        }
+    }
 
     @Spec
     CommandLine.Model.CommandSpec spec;
@@ -77,9 +89,11 @@ public class BytecodeCli implements Runnable {
             JarStatistics s = JarStatistics.from(mapping);
             if (json) {
                 System.out.printf(
-                        "{\"programClasses\":%d,\"libraryClasses\":%d,\"resources\":%d,\"interfaces\":%d,\"abstractClasses\":%d,\"finalClasses\":%d,\"publicClasses\":%d,\"methods\":%d,\"fields\":%d}%n",
+                        "{\"programClasses\":%d,\"libraryClasses\":%d,\"moduleDescriptors\":%d,\"packageInfos\":%d,\"resources\":%d,\"interfaces\":%d,\"abstractClasses\":%d,\"finalClasses\":%d,\"publicClasses\":%d,\"methods\":%d,\"fields\":%d}%n",
                         s.getProgramClassCount(),
                         s.getLibraryClassCount(),
+                        s.getModuleDescriptorCount(),
+                        s.getPackageInfoCount(),
                         s.getResourceCount(),
                         s.getInterfaceCount(),
                         s.getAbstractClassCount(),
@@ -90,6 +104,8 @@ public class BytecodeCli implements Runnable {
             } else {
                 System.out.println("Program classes: " + s.getProgramClassCount());
                 System.out.println("Library classes: " + s.getLibraryClassCount());
+                System.out.println("Module descriptors: " + s.getModuleDescriptorCount());
+                System.out.println("Package infos: " + s.getPackageInfoCount());
                 System.out.println("Resources: " + s.getResourceCount());
                 System.out.println("Interfaces: " + s.getInterfaceCount());
                 System.out.println("Abstract classes: " + s.getAbstractClassCount());

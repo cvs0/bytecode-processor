@@ -33,19 +33,23 @@ class OptimizationPluginSmokeTest {
 
         OptimizationPlugin p = new OptimizationPlugin();
         Map<String, Object> cfg = new HashMap<>();
-        cfg.put("removeNops", true);
-        cfg.put("optimizeConstants", false);
+        cfg.put(OptimizationPlugin.CFG_REMOVE_NOPS, true);
+        cfg.put(OptimizationPlugin.CFG_OPTIMIZE_CONSTANTS, false);
         p.configure(cfg);
         p.process(m);
 
         MethodNode out = m.getProgramClass("opt/NopClass").getClassNode().methods.getFirst();
         boolean hasNop = false;
+        boolean hasReturn = false;
         for (AbstractInsnNode i = out.instructions.getFirst(); i != null; i = i.getNext()) {
             if (i.getOpcode() == Opcodes.NOP) {
                 hasNop = true;
-                break;
+            }
+            if (i.getOpcode() == Opcodes.RETURN) {
+                hasReturn = true;
             }
         }
         assertFalse(hasNop, "NOP should be removed");
+        assertTrue(hasReturn, "RETURN must remain (InsnList must not be wiped)");
     }
 }

@@ -95,12 +95,13 @@ public class AttributeFactory {
     public static LineNumberTableAttribute createLineNumberTable(List<LineNumberNode> lineNumberNodes, MethodNode parentMethod) {
         LineNumberTableAttribute attribute = new LineNumberTableAttribute();
         if (lineNumberNodes != null && !lineNumberNodes.isEmpty()) {
+            InsnList insnList = parentMethod != null ? parentMethod.instructions : null;
             for (int i = 0; i < lineNumberNodes.size(); i++) {
                 LineNumberNode node = lineNumberNodes.get(i);
-                int startPc = node.start.getLabel().getOffset();
+                int startPc = resolveInstructionPc(node.start, insnList);
                 int endPc = -1;
                 if (i + 1 < lineNumberNodes.size()) {
-                    endPc = lineNumberNodes.get(i + 1).start.getLabel().getOffset();
+                    endPc = resolveInstructionPc(lineNumberNodes.get(i + 1).start, insnList);
                 }
 
                 boolean synthetic = (parentMethod != null && (parentMethod.access & 0x1000) != 0) || node.line == 0;
@@ -150,21 +151,15 @@ public class AttributeFactory {
             codeAttribute.setCode(codeBytes);
         }
 
-        if (methodNode.tryCatchBlocks != null) {
-            methodNode.tryCatchBlocks.forEach(tcb -> {
-                try {
-                    int start = tcb.start.getLabel().getOffset();
-                    int end = tcb.end.getLabel().getOffset();
-                    int handlerOffset = tcb.handler.getLabel().getOffset();
-
-                    CodeAttribute.ExceptionHandler handler = new CodeAttribute.ExceptionHandler(
-                            start, end, handlerOffset, tcb.type
-                    );
-                    codeAttribute.addExceptionHandler(handler);
-                } catch (IllegalStateException e) {
-
-                }
-            });
+        if (methodNode.tryCatchBlocks != null && methodNode.instructions != null) {
+            InsnList il = methodNode.instructions;
+            for (var tcb : methodNode.tryCatchBlocks) {
+                int start = resolveInstructionPc(tcb.start, il);
+                int end = resolveInstructionPc(tcb.end, il);
+                int handlerOffset = resolveInstructionPc(tcb.handler, il);
+                codeAttribute.addExceptionHandler(
+                        new CodeAttribute.ExceptionHandler(start, end, handlerOffset, tcb.type));
+            }
         }
 
         if (methodNode.localVariables != null) {

@@ -1,6 +1,8 @@
 package net.cvs0.bytecode.transform;
 
 import net.cvs0.bytecode.JarMapping;
+import net.cvs0.bytecode.clazz.ModuleInfoClass;
+import net.cvs0.bytecode.clazz.PackageInfoClass;
 import net.cvs0.bytecode.clazz.ProgramClass;
 import net.cvs0.bytecode.member.ProgramField;
 import net.cvs0.bytecode.member.ProgramMethod;
@@ -15,6 +17,9 @@ import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.ModuleExportNode;
+import org.objectweb.asm.tree.ModuleNode;
+import org.objectweb.asm.tree.ModuleOpenNode;
 import org.objectweb.asm.tree.MultiANewArrayInsnNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
@@ -114,6 +119,52 @@ public class ClassTransformer {
                 renameClass(n, newP + tail);
             }
         }
+        for (PackageInfoClass pic : new ArrayList<>(mapping.getPackageInfos())) {
+            String n = pic.getInternalName();
+            if (n.startsWith(oldP + '/')) {
+                String tail = n.substring(oldP.length());
+                renameClass(n, newP + tail);
+            }
+        }
+        structuralTasks.add(() -> remapModuleDescriptorPackages(mapping, oldP, newP));
+    }
+
+    private static void remapModuleDescriptorPackages(JarMapping mapping, String oldP, String newP) {
+        for (ModuleInfoClass mic : mapping.getModuleInfos()) {
+            ClassNode cn = mic.getClassNode();
+            if (cn == null || cn.module == null) {
+                continue;
+            }
+            ModuleNode mod = cn.module;
+            if (mod.exports != null) {
+                for (ModuleExportNode e : mod.exports) {
+                    e.packaze = remapSlashPackagePrefix(e.packaze, oldP, newP);
+                }
+            }
+            if (mod.opens != null) {
+                for (ModuleOpenNode o : mod.opens) {
+                    o.packaze = remapSlashPackagePrefix(o.packaze, oldP, newP);
+                }
+            }
+            if (mod.packages != null) {
+                for (int i = 0; i < mod.packages.size(); i++) {
+                    mod.packages.set(i, remapSlashPackagePrefix(mod.packages.get(i), oldP, newP));
+                }
+            }
+        }
+    }
+
+    private static String remapSlashPackagePrefix(String pkgSlash, String oldP, String newP) {
+        if (pkgSlash == null) {
+            return null;
+        }
+        if (pkgSlash.equals(oldP)) {
+            return newP;
+        }
+        if (pkgSlash.startsWith(oldP + '/')) {
+            return newP + pkgSlash.substring(oldP.length());
+        }
+        return pkgSlash;
     }
 
     /**
@@ -673,22 +724,24 @@ public class ClassTransformer {
         if (method.getMethodNode() != null && method.getMethodNode().instructions != null) {
             method.getMethodNode().instructions.forEach(insn -> {
                 if (insn instanceof FieldInsnNode fieldInsn) {
+                    String originalFieldOwner = fieldInsn.owner;
                     if (classNameMappings.containsKey(fieldInsn.owner)) {
                         fieldInsn.owner = classNameMappings.get(fieldInsn.owner);
                     }
 
-                    String fieldKey = fieldInsn.owner + "." + fieldInsn.name;
+                    String fieldKey = originalFieldOwner + "." + fieldInsn.name;
                     if (fieldNameMappings.containsKey(fieldKey)) {
                         fieldInsn.name = fieldNameMappings.get(fieldKey);
                     }
                 }
 
                 if (insn instanceof MethodInsnNode methodInsn) {
+                    String originalMethodOwner = methodInsn.owner;
                     if (classNameMappings.containsKey(methodInsn.owner)) {
                         methodInsn.owner = classNameMappings.get(methodInsn.owner);
                     }
 
-                    String methodKey = methodInsn.owner + "." + methodInsn.name + methodInsn.desc;
+                    String methodKey = originalMethodOwner + "." + methodInsn.name + methodInsn.desc;
                     if (methodNameMappings.containsKey(methodKey)) {
                         methodInsn.name = methodNameMappings.get(methodKey);
                     }

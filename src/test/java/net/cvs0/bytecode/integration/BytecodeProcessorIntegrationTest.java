@@ -101,16 +101,16 @@ class BytecodeProcessorIntegrationTest {
     void testPluginIntegration() {
         ObfuscationPlugin obfuscationPlugin = new ObfuscationPlugin();
         Map<String, Object> obfuscationConfig = new HashMap<>();
-        obfuscationConfig.put("obfuscateClasses", true);
-        obfuscationConfig.put("obfuscateMethods", true);
-        obfuscationConfig.put("obfuscateFields", true);
-        obfuscationConfig.put("namePrefix", "obf");
+        obfuscationConfig.put(ObfuscationPlugin.CFG_OBFUSCATE_CLASSES, true);
+        obfuscationConfig.put(ObfuscationPlugin.CFG_OBFUSCATE_METHODS, true);
+        obfuscationConfig.put(ObfuscationPlugin.CFG_OBFUSCATE_FIELDS, true);
+        obfuscationConfig.put(ObfuscationPlugin.CFG_NAME_PREFIX, "obf");
         obfuscationPlugin.configure(obfuscationConfig);
-        
+
         OptimizationPlugin optimizationPlugin = new OptimizationPlugin();
         Map<String, Object> optimizationConfig = new HashMap<>();
-        optimizationConfig.put("removeNops", true);
-        optimizationConfig.put("optimizeConstants", true);
+        optimizationConfig.put(OptimizationPlugin.CFG_REMOVE_NOPS, true);
+        optimizationConfig.put(OptimizationPlugin.CFG_OPTIMIZE_CONSTANTS, true);
         optimizationPlugin.configure(optimizationConfig);
         
         pluginManager.registerPlugin(obfuscationPlugin);

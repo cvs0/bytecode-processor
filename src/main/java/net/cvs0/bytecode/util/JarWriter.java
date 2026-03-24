@@ -1,11 +1,17 @@
 package net.cvs0.bytecode.util;
 
 import net.cvs0.bytecode.JarMapping;
+import net.cvs0.bytecode.clazz.ModuleInfoClass;
+import net.cvs0.bytecode.clazz.PackageInfoClass;
 import net.cvs0.bytecode.clazz.ProgramClass;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.tree.ClassNode;
 
 import java.io.*;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
@@ -35,11 +41,7 @@ public class JarWriter {
     public static void write(JarMapping mapping, File outputFile) throws IOException {
         try (FileOutputStream fos = new FileOutputStream(outputFile);
              JarOutputStream jos = new JarOutputStream(fos, createDefaultManifest())) {
-            
-            for (ProgramClass programClass : mapping.getProgramClasses()) {
-                writeClassEntry(jos, programClass);
-            }
-            
+            writeClassLikeEntries(mapping, jos);
             for (String resourceName : mapping.getResourceNames()) {
                 if (MANIFEST_ENTRY.equals(resourceName)) {
                     continue;
@@ -59,11 +61,7 @@ public class JarWriter {
     public static void write(JarMapping mapping, File outputFile, Manifest manifest) throws IOException {
         try (FileOutputStream fos = new FileOutputStream(outputFile);
              JarOutputStream jos = new JarOutputStream(fos, manifest)) {
-            
-            for (ProgramClass programClass : mapping.getProgramClasses()) {
-                writeClassEntry(jos, programClass);
-            }
-            
+            writeClassLikeEntries(mapping, jos);
             for (String resourceName : mapping.getResourceNames()) {
                 if (MANIFEST_ENTRY.equals(resourceName)) {
                     continue;
@@ -71,6 +69,41 @@ public class JarWriter {
                 writeResourceEntry(jos, resourceName, mapping.getResource(resourceName));
             }
         }
+    }
+
+    private static void writeClassLikeEntries(JarMapping mapping, JarOutputStream jos) throws IOException {
+        List<String> modulePaths = new ArrayList<>(mapping.getModuleInfoEntryNames());
+        modulePaths.sort(Comparator.naturalOrder());
+        for (String path : modulePaths) {
+            ModuleInfoClass mi = mapping.getModuleInfo(path);
+            if (mi != null && mi.getClassNode() != null) {
+                writeRawClassEntry(jos, mi.getJarEntryName(), classBytesFromNode(mi.getClassNode()));
+            }
+        }
+        List<String> packagePaths = new ArrayList<>(mapping.getPackageInfoEntryNames());
+        packagePaths.sort(Comparator.naturalOrder());
+        for (String path : packagePaths) {
+            PackageInfoClass pi = mapping.getPackageInfo(path);
+            if (pi != null && pi.getClassNode() != null) {
+                writeRawClassEntry(jos, pi.getJarEntryName(), classBytesFromNode(pi.getClassNode()));
+            }
+        }
+        for (ProgramClass programClass : mapping.getProgramClasses()) {
+            writeClassEntry(jos, programClass);
+        }
+    }
+
+    private static void writeRawClassEntry(JarOutputStream jos, String jarPath, byte[] classBytes) throws IOException {
+        JarEntry entry = new JarEntry(jarPath);
+        jos.putNextEntry(entry);
+        jos.write(classBytes);
+        jos.closeEntry();
+    }
+
+    static byte[] classBytesFromNode(ClassNode classNode) {
+        ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
+        classNode.accept(classWriter);
+        return classWriter.toByteArray();
     }
     
     /**
@@ -110,12 +143,9 @@ public class JarWriter {
      */
     private static byte[] generateClassBytes(ProgramClass programClass) {
         if (programClass.getClassNode() != null) {
-            ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
-            programClass.getClassNode().accept(classWriter);
-            return classWriter.toByteArray();
-        } else {
-            throw new IllegalStateException("Cannot generate bytes for class without ClassNode: " + programClass.getName());
+            return classBytesFromNode(programClass.getClassNode());
         }
+        throw new IllegalStateException("Cannot generate bytes for class without ClassNode: " + programClass.getName());
     }
     
     /**

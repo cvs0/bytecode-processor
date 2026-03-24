@@ -16,6 +16,8 @@ class JarStatisticsTest {
         assertEquals(0, s.getProgramClassCount());
         assertEquals(0, s.getTotalMethods());
         assertEquals(0, s.getResourceCount());
+        assertEquals(0, s.getModuleDescriptorCount());
+        assertEquals(0, s.getPackageInfoCount());
     }
 
     @Test

@@ -60,7 +60,11 @@ public class JarAnalyzer {
             return;
         }
         Collection<ProgramClass> classes = mapping.getProgramClasses();
-        System.out.println("✅ Loaded " + classes.size() + " classes");
+        int mod = mapping.getModuleInfoCount();
+        int pkg = mapping.getPackageInfoCount();
+        System.out.println("✅ Loaded " + classes.size() + " program classes"
+                + (mod > 0 ? ", " + mod + " module descriptor(s)" : "")
+                + (pkg > 0 ? ", " + pkg + " package-info" : ""));
         System.out.println();
         
         // Basic statistics
@@ -92,6 +96,10 @@ public class JarAnalyzer {
         if (s.getLibraryClassCount() > 0 || s.getResourceCount() > 0) {
             System.out.println("Library classes: " + s.getLibraryClassCount());
             System.out.println("Resources: " + s.getResourceCount());
+        }
+        if (s.getModuleDescriptorCount() > 0 || s.getPackageInfoCount() > 0) {
+            System.out.println("Module descriptors: " + s.getModuleDescriptorCount());
+            System.out.println("Package infos: " + s.getPackageInfoCount());
         }
         System.out.println();
     }

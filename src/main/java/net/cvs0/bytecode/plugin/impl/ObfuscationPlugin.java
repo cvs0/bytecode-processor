@@ -7,58 +7,64 @@ import net.cvs0.bytecode.member.ProgramMethod;
 import net.cvs0.bytecode.plugin.AbstractPlugin;
 import net.cvs0.bytecode.transform.ClassTransformer;
 
-import java.util.Random;
-
 /**
- * Plugin that obfuscates class, method, and field names in a JarMapping.
- * Supports configuration for which elements to obfuscate and name prefix/seed.
+ * <p>Example plugin: renames program classes, methods, and fields to opaque identifiers and applies
+ * {@link ClassTransformer} once at the end.</p>
+ *
+ * <p><b>Configuration keys</b> (via {@link net.cvs0.bytecode.plugin.ConfigurablePlugin#configure})</p>
+ * <table border="1" summary="ObfuscationPlugin configuration">
+ *   <tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr>
+ *   <tr><td>{@value ObfuscationPlugin#CFG_OBFUSCATE_CLASSES}</td><td>boolean</td><td>{@code true}</td><td>Rename internal program class names.</td></tr>
+ *   <tr><td>{@value ObfuscationPlugin#CFG_OBFUSCATE_METHODS}</td><td>boolean</td><td>{@code true}</td><td>Rename methods (constructors and {@code main} skipped).</td></tr>
+ *   <tr><td>{@value ObfuscationPlugin#CFG_OBFUSCATE_FIELDS}</td><td>boolean</td><td>{@code true}</td><td>Rename fields ({@code static final} constants skipped).</td></tr>
+ *   <tr><td>{@value ObfuscationPlugin#CFG_NAME_PREFIX}</td><td>String</td><td>{@code "a"}</td><td>Prefix for generated names; suffix is a monotonic counter.</td></tr>
+ * </table>
  */
 public class ObfuscationPlugin extends AbstractPlugin {
-    private Random random;
-    private int counter;
 
-    /**
-     * Constructs an ObfuscationPlugin with default metadata.
-     */
+    public static final String CFG_OBFUSCATE_CLASSES = "obfuscateClasses";
+    public static final String CFG_OBFUSCATE_METHODS = "obfuscateMethods";
+    public static final String CFG_OBFUSCATE_FIELDS = "obfuscateFields";
+    public static final String CFG_NAME_PREFIX = "namePrefix";
+
+    private static final String[] JDK_PREFIXES = {
+            "java/", "javax/", "jdk/", "sun/", "com/sun/", "org/w3c/", "org/xml/"
+    };
+
+    private int nameCounter;
+
     public ObfuscationPlugin() {
-        super("Obfuscation Plugin", "1.0.0", "Obfuscates class, method, and field names");
+        super(
+                "ObfuscationPlugin",
+                "2.0.0",
+                "Example: rename program classes, methods, and fields using ClassTransformer");
     }
 
-    /**
-     * Initializes the plugin and random seed.
-     */
     @Override
     public void initialize() {
         super.initialize();
-        long seed = getIntConfig("seed", (int) System.currentTimeMillis());
-        random = new Random(seed);
-        counter = 0;
+        nameCounter = 0;
     }
 
-    /**
-     * Processes the JarMapping and applies obfuscation to classes, methods, and fields as configured.
-     *
-     * @param mapping the JarMapping to process
-     */
     @Override
     public void process(JarMapping mapping) {
-        boolean obfuscateClasses = getBooleanConfig("obfuscateClasses", true);
-        boolean obfuscateMethods = getBooleanConfig("obfuscateMethods", true);
-        boolean obfuscateFields = getBooleanConfig("obfuscateFields", true);
+        boolean obfuscateClasses = getBooleanConfig(CFG_OBFUSCATE_CLASSES, true);
+        boolean obfuscateMethods = getBooleanConfig(CFG_OBFUSCATE_METHODS, true);
+        boolean obfuscateFields = getBooleanConfig(CFG_OBFUSCATE_FIELDS, true);
 
         ClassTransformer transformer = new ClassTransformer(mapping);
 
         for (ProgramClass clazz : mapping.getProgramClasses()) {
-            if (obfuscateClasses && shouldObfuscateClass(clazz)) {
-                String newName = generateObfuscatedName();
-                transformer.renameClass(clazz.getName(), newName);
+            String className = clazz.getName();
+
+            if (obfuscateClasses && shouldObfuscateClass(className)) {
+                transformer.renameClass(className, nextName());
             }
 
             if (obfuscateFields) {
                 for (ProgramField field : clazz.getFields()) {
                     if (shouldObfuscateField(field)) {
-                        String newName = generateObfuscatedName();
-                        transformer.renameField(clazz.getName(), field.getName(), newName);
+                        transformer.renameField(className, field.getName(), nextName());
                     }
                 }
             }
@@ -66,8 +72,7 @@ public class ObfuscationPlugin extends AbstractPlugin {
             if (obfuscateMethods) {
                 for (ProgramMethod method : clazz.getMethods()) {
                     if (shouldObfuscateMethod(method)) {
-                        String newName = generateObfuscatedName();
-                        transformer.renameMethod(clazz.getName(), method.getName(), method.getDescriptor(), newName);
+                        transformer.renameMethod(className, method.getName(), method.getDescriptor(), nextName());
                     }
                 }
             }
@@ -76,59 +81,40 @@ public class ObfuscationPlugin extends AbstractPlugin {
         transformer.applyTransformations();
     }
 
-    /**
-     * Returns true if the class should be obfuscated.
-     *
-     * @param clazz the ProgramClass
-     * @return true if obfuscate
-     */
-    private boolean shouldObfuscateClass(ProgramClass clazz) {
-        return !clazz.getName().startsWith("java/") &&
-               !clazz.getName().startsWith("javax/") &&
-               !clazz.getName().startsWith("sun/") &&
-               !clazz.getName().contains("Main");
+    private String nextName() {
+        String prefix = getStringConfig(CFG_NAME_PREFIX, "a");
+        return prefix + (nameCounter++);
+    }
+
+    private static boolean shouldObfuscateClass(String internalName) {
+        for (String p : JDK_PREFIXES) {
+            if (internalName.startsWith(p)) {
+                return false;
+            }
+        }
+        int slash = internalName.lastIndexOf('/');
+        String simple = slash < 0 ? internalName : internalName.substring(slash + 1);
+        return !simple.equals("Main");
+    }
+
+    private static boolean shouldObfuscateMethod(ProgramMethod method) {
+        if (method.isConstructor() || method.isStaticInitializer()) {
+            return false;
+        }
+        String n = method.getName();
+        if ("main".equals(n) || "equals".equals(n) || "hashCode".equals(n) || "toString".equals(n)) {
+            return false;
+        }
+        return !n.startsWith("get") && !n.startsWith("set") && !n.startsWith("is");
     }
 
     /**
-     * Returns true if the method should be obfuscated.
-     *
-     * @param method the ProgramMethod
-     * @return true if obfuscate
+     * Skips {@code static final} fields (typical constants) to avoid breaking reflection and switch tables.
      */
-    private boolean shouldObfuscateMethod(ProgramMethod method) {
-        return !method.isConstructor() &&
-               !method.isStaticInitializer() &&
-               !"main".equals(method.getName()) &&
-               !method.getName().startsWith("get") &&
-               !method.getName().startsWith("set") &&
-               !method.getName().startsWith("is");
+    private static boolean shouldObfuscateField(ProgramField field) {
+        return !(field.isStatic() && field.isFinal());
     }
 
-    /**
-     * Returns true if the field should be obfuscated.
-     *
-     * @param field the ProgramField
-     * @return true if obfuscate
-     */
-    private boolean shouldObfuscateField(ProgramField field) {
-        return !field.isFinal() || !field.isStatic();
-    }
-
-    /**
-     * Generates a new obfuscated name using the configured prefix and counter.
-     *
-     * @return the obfuscated name
-     */
-    private String generateObfuscatedName() {
-        String prefix = getStringConfig("namePrefix", "a");
-        return prefix + (counter++);
-    }
-
-    /**
-     * Returns the plugin priority (higher runs first).
-     *
-     * @return the plugin priority
-     */
     @Override
     public int getPriority() {
         return 100;
