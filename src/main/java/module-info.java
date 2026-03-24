@@ -1,6 +1,7 @@
 module bytecode.processor {
     requires java.logging;
     requires org.objectweb.asm.tree;
+    requires org.objectweb.asm.commons;
     requires info.picocli;
     requires static lombok;
 

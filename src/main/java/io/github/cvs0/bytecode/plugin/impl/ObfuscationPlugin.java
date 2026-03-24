@@ -7,9 +7,16 @@ import io.github.cvs0.bytecode.member.ProgramMethod;
 import io.github.cvs0.bytecode.plugin.AbstractPlugin;
 import io.github.cvs0.bytecode.transform.ClassTransformer;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
 /**
  * <p>Example plugin: renames program classes, methods, and fields to opaque identifiers and applies
- * {@link ClassTransformer} once at the end.</p>
+ * {@link ClassTransformer} once at the end. Program classes are visited in sorted name order so naming is stable
+ * across runs. After transforms, merged classpath bytecode (from {@link io.github.cvs0.bytecode.JarMapping#mergeClasspathJar})
+ * is rewritten so dependencies still reference renamed types; {@code META-INF/services/*} paths and provider lines plus
+ * manifest launch attributes ({@code Main-Class}, {@code Start-Class}, etc.) are updated when possible.</p>
  *
  * <p><b>Configuration keys</b> (via {@link io.github.cvs0.bytecode.plugin.ConfigurablePlugin#configure})</p>
  * <table border="1" summary="ObfuscationPlugin configuration">
@@ -54,7 +61,10 @@ public class ObfuscationPlugin extends AbstractPlugin {
 
         ClassTransformer transformer = new ClassTransformer(mapping);
 
-        for (ProgramClass clazz : mapping.getProgramClasses()) {
+        List<ProgramClass> classes = new ArrayList<>(mapping.getProgramClasses());
+        classes.sort(Comparator.comparing(ProgramClass::getName));
+
+        for (ProgramClass clazz : classes) {
             String className = clazz.getName();
 
             if (obfuscateClasses && shouldObfuscateClass(className)) {
@@ -79,6 +89,13 @@ public class ObfuscationPlugin extends AbstractPlugin {
         }
 
         transformer.applyTransformations();
+        mapping.remapMergedClasspathBytecode(
+                transformer.getClassNameMappings(),
+                transformer.getFieldNameMappings(),
+                transformer.getMethodNameMappings());
+        mapping.remapServiceLoaderResourcePaths(transformer.getClassNameMappings());
+        mapping.remapServiceLoaderImplementations(transformer.getClassNameMappings());
+        mapping.remapManifestMainClass(transformer.getClassNameMappings());
     }
 
     private String nextName() {
