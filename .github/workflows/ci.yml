@@ -2,25 +2,10 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - master
-      - develop
-      - development
-      - "release/**"
-      - "v*"
-  pull_request:
-    branches:
-      - main
-      - master
-      - develop
-      - development
-      - "release/**"
-      - "v*"
-  workflow_dispatch:
+    branches: [develop, development]
 
 jobs:
-  verify:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,12 +20,11 @@ jobs:
           java-version: "21"
           cache: maven
           server-id: github
-          server-username: ${{ github.actor }}
-          server-password: ${{ github.token }}
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
 
-      - name: Verify
-        run: mvn -B verify
-
-      - name: Deploy SNAPSHOT (develop only)
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/development')
-        run: mvn -B deploy -DskipTests
+      - name: Publish
+        run: mvn -B deploy
+        env:
+          MAVEN_USERNAME: ${{ github.actor }}
+          MAVEN_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
