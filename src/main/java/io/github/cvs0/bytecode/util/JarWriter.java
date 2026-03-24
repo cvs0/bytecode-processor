@@ -7,89 +7,136 @@ import io.github.cvs0.bytecode.clazz.ProgramClass;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 
 /**
- * Utility class for writing classes and resources to JAR files.
- * Supports writing entire JarMapping contents, individual classes, and resources.
+ * Writes {@link JarMapping} to a JAR: module descriptors, package-info, program classes, merged classes, then resources.
+ * The manifest resource is supplied to {@link JarOutputStream} and is not written again as a resource entry.
  */
 public class JarWriter {
 
-    /** Written implicitly by {@link JarOutputStream#JarOutputStream(OutputStream, Manifest)} — must not be duplicated as a resource. */
-    private static final String MANIFEST_ENTRY = "META-INF/MANIFEST.MF";
-    /**
-     * Writes all classes and resources from the mapping to the specified output JAR file.
-     * Uses a default manifest.
-     * @param mapping the JarMapping to write
-     * @param outputFile the output JAR file
-     * @throws IOException if writing fails
-     */
-    /**
-     * Writes the mapping to a JAR file at the given path.
-     */
     public static void write(JarMapping mapping, Path outputPath) throws IOException {
         write(mapping, outputPath.toFile());
     }
 
+    /**
+     * Uses the mapping's {@link JarLayout#MANIFEST} resource when present and parseable; otherwise a minimal default.
+     */
     public static void write(JarMapping mapping, File outputFile) throws IOException {
-        try (FileOutputStream fos = new FileOutputStream(outputFile);
-             JarOutputStream jos = new JarOutputStream(fos, createDefaultManifest())) {
-            writeClassLikeEntries(mapping, jos);
-            for (String resourceName : mapping.getResourceNames()) {
-                if (MANIFEST_ENTRY.equals(resourceName)) {
-                    continue;
-                }
-                writeResourceEntry(jos, resourceName, mapping.getResource(resourceName));
+        write(mapping, outputFile, resolveManifest(mapping));
+    }
+
+    private static Manifest resolveManifest(JarMapping mapping) {
+        byte[] raw = mapping.getResource(JarLayout.MANIFEST);
+        if (raw != null && raw.length > 0) {
+            try {
+                return new Manifest(new ByteArrayInputStream(raw));
+            } catch (IOException ignored) {
+                // Corrupt manifest: fall back so output JAR is still produced
             }
         }
+        return createDefaultManifest();
     }
-    
+
     /**
-     * Writes all classes and resources from the mapping to the specified output JAR file, using a custom manifest.
-     * @param mapping the JarMapping to write
-     * @param outputFile the output JAR file
-     * @param manifest the manifest to use
-     * @throws IOException if writing fails
+     * Writes with the given manifest (full control over {@code Main-Class} and other main attributes).
      */
     public static void write(JarMapping mapping, File outputFile, Manifest manifest) throws IOException {
+        Objects.requireNonNull(manifest, "manifest");
         try (FileOutputStream fos = new FileOutputStream(outputFile);
-             JarOutputStream jos = new JarOutputStream(fos, manifest)) {
+                JarOutputStream jos = new JarOutputStream(fos, manifest)) {
             writeClassLikeEntries(mapping, jos);
-            for (String resourceName : mapping.getResourceNames()) {
-                if (MANIFEST_ENTRY.equals(resourceName)) {
-                    continue;
-                }
-                writeResourceEntry(jos, resourceName, mapping.getResource(resourceName));
+            writeResources(mapping, jos);
+        }
+    }
+
+    private static void writeResources(JarMapping mapping, JarOutputStream jos) throws IOException {
+        List<String> names = new ArrayList<>(mapping.getResourceNames());
+        Collections.sort(names);
+        for (String resourceName : names) {
+            if (JarLayout.MANIFEST.equals(resourceName)) {
+                continue;
             }
+            byte[] data = mapping.getResource(resourceName);
+            if (data == null) {
+                continue;
+            }
+            writeResourceEntry(jos, resourceName, data);
         }
     }
 
     private static void writeClassLikeEntries(JarMapping mapping, JarOutputStream jos) throws IOException {
+        Set<String> writtenPaths = new HashSet<>();
+        writeModuleDescriptors(mapping, jos, writtenPaths);
+        writePackageInfos(mapping, jos, writtenPaths);
+        writeProgramClasses(mapping, jos, writtenPaths);
+        writeMergedClasses(mapping, jos, writtenPaths);
+    }
+
+    private static void writeModuleDescriptors(JarMapping mapping, JarOutputStream jos, Set<String> writtenPaths)
+            throws IOException {
         List<String> modulePaths = new ArrayList<>(mapping.getModuleInfoEntryNames());
         modulePaths.sort(Comparator.naturalOrder());
         for (String path : modulePaths) {
             ModuleInfoClass mi = mapping.getModuleInfo(path);
             if (mi != null && mi.getClassNode() != null) {
-                writeRawClassEntry(jos, mi.getJarEntryName(), classBytesFromNode(mi.getClassNode()));
+                String jarPath = mi.getJarEntryName();
+                writeRawClassEntry(jos, jarPath, classBytesFromNode(mi.getClassNode()));
+                writtenPaths.add(jarPath);
             }
         }
+    }
+
+    private static void writePackageInfos(JarMapping mapping, JarOutputStream jos, Set<String> writtenPaths)
+            throws IOException {
         List<String> packagePaths = new ArrayList<>(mapping.getPackageInfoEntryNames());
         packagePaths.sort(Comparator.naturalOrder());
         for (String path : packagePaths) {
             PackageInfoClass pi = mapping.getPackageInfo(path);
             if (pi != null && pi.getClassNode() != null) {
-                writeRawClassEntry(jos, pi.getJarEntryName(), classBytesFromNode(pi.getClassNode()));
+                String jarPath = pi.getJarEntryName();
+                writeRawClassEntry(jos, jarPath, classBytesFromNode(pi.getClassNode()));
+                writtenPaths.add(jarPath);
             }
         }
-        for (ProgramClass programClass : mapping.getProgramClasses()) {
+    }
+
+    private static void writeProgramClasses(JarMapping mapping, JarOutputStream jos, Set<String> writtenPaths)
+            throws IOException {
+        List<ProgramClass> classes = new ArrayList<>(mapping.getProgramClasses());
+        classes.sort(Comparator.comparing(ProgramClass::getName));
+        for (ProgramClass programClass : classes) {
+            String jarPath = programClass.getName() + ".class";
             writeClassEntry(jos, programClass);
+            writtenPaths.add(jarPath);
+        }
+    }
+
+    private static void writeMergedClasses(JarMapping mapping, JarOutputStream jos, Set<String> writtenPaths)
+            throws IOException {
+        for (String mergedPath : mapping.getMergedEntryPaths()) {
+            if (writtenPaths.contains(mergedPath)) {
+                continue;
+            }
+            byte[] data = mapping.getMergedEntry(mergedPath);
+            if (data != null) {
+                writeRawClassEntry(jos, mergedPath, data);
+                writtenPaths.add(mergedPath);
+            }
         }
     }
 
@@ -105,93 +152,51 @@ public class JarWriter {
         classNode.accept(classWriter);
         return classWriter.toByteArray();
     }
-    
-    /**
-     * Writes a single class entry to the JAR output stream.
-     * @param jos the JarOutputStream
-     * @param programClass the ProgramClass to write
-     * @throws IOException if writing fails
-     */
+
     private static void writeClassEntry(JarOutputStream jos, ProgramClass programClass) throws IOException {
         String className = programClass.getName() + ".class";
         JarEntry entry = new JarEntry(className);
         jos.putNextEntry(entry);
-        
-        byte[] classBytes = generateClassBytes(programClass);
-        jos.write(classBytes);
+        jos.write(generateClassBytes(programClass));
         jos.closeEntry();
     }
-    
-    /**
-     * Writes a single resource entry to the JAR output stream.
-     * @param jos the JarOutputStream
-     * @param resourceName the resource name
-     * @param resourceData the resource data
-     * @throws IOException if writing fails
-     */
-    private static void writeResourceEntry(JarOutputStream jos, String resourceName, byte[] resourceData) throws IOException {
+
+    private static void writeResourceEntry(JarOutputStream jos, String resourceName, byte[] resourceData)
+            throws IOException {
         JarEntry entry = new JarEntry(resourceName);
         jos.putNextEntry(entry);
         jos.write(resourceData);
         jos.closeEntry();
     }
-    
-    /**
-     * Generates the bytecode for a ProgramClass.
-     * @param programClass the ProgramClass
-     * @return the byte array of class bytes
-     */
+
     private static byte[] generateClassBytes(ProgramClass programClass) {
         if (programClass.getClassNode() != null) {
             return classBytesFromNode(programClass.getClassNode());
         }
         throw new IllegalStateException("Cannot generate bytes for class without ClassNode: " + programClass.getName());
     }
-    
-    /**
-     * Creates a default manifest for JAR files.
-     * @return a Manifest instance
-     */
+
     private static Manifest createDefaultManifest() {
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().putValue("Manifest-Version", "1.0");
         manifest.getMainAttributes().putValue("Created-By", "Bytecode Processor Library");
         return manifest;
     }
-    
-    /**
-     * Writes a single class to a .class file.
-     * @param programClass the ProgramClass to write
-     * @param outputFile the output file
-     * @throws IOException if writing fails
-     */
+
     public static void writeClass(ProgramClass programClass, File outputFile) throws IOException {
         byte[] classBytes = generateClassBytes(programClass);
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
             fos.write(classBytes);
         }
     }
-    
-    /**
-     * Returns the byte array for a ProgramClass.
-     * @param programClass the ProgramClass
-     * @return the class bytes
-     */
+
     public static byte[] getClassBytes(ProgramClass programClass) {
         return generateClassBytes(programClass);
     }
-    
-    /**
-     * Writes a resource to the specified output directory.
-     * @param resourceName the resource name
-     * @param resourceData the resource data
-     * @param outputDir the output directory
-     * @throws IOException if writing fails
-     */
+
     public static void writeResource(String resourceName, byte[] resourceData, File outputDir) throws IOException {
         File outputFile = new File(outputDir, resourceName);
         outputFile.getParentFile().mkdirs();
-        
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
             fos.write(resourceData);
         }
