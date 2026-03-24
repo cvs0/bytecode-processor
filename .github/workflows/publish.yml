@@ -1,10 +1,9 @@
-# Publishes to Maven Central (OSSRH) when a v* tag is pushed.
-# Requires repository secrets: OSSRH_USERNAME, OSSRH_TOKEN, GPG_PRIVATE_KEY, GPG_PASSPHRASE
 name: Publish to Maven Central
 
 on:
   push:
     tags: ["v*"]
+    branches: [development]
 
 jobs:
   publish:
@@ -28,7 +27,12 @@ jobs:
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
       - name: Publish to Maven Central
-        run: mvn -B deploy -Prelease -DskipTests -Drevision="${GITHUB_REF_NAME#v}"
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            mvn -B deploy -Prelease -DskipTests -Drevision="${GITHUB_REF_NAME#v}"
+          else
+            mvn -B deploy -Prelease -DskipTests
+          fi
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
