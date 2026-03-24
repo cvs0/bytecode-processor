@@ -18,8 +18,10 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Utility class for reading classes and resources from JAR files and class files.
- * Supports loading classes into JarMapping and reading raw bytes.
+ * Populates a {@link io.github.cvs0.bytecode.JarMapping} from a JAR on disk (program classes, library classes,
+ * {@code module-info}, {@code package-info}, resources). Pair with {@link JarWriter} for round-trips.
+ *
+ * @see io.github.cvs0.bytecode.JarMapping#fromJar(java.nio.file.Path)
  */
 public class JarReader {
     /**
@@ -49,6 +51,7 @@ public class JarReader {
                     processResourceEntry(jar, entry, mapping);
                 }
             }
+            JarLibraryClassifier.classify(mapping);
         }
     }
 
@@ -110,6 +113,7 @@ public class JarReader {
             }
 
             ProgramClass programClass = new ProgramClass(classNode);
+            programClass.setJarEntryName(entry.getName());
             int classVersion = classReader.readShort(6);
             programClass.setClassVersion(classVersion);
             if (classNode.recordComponents != null) {

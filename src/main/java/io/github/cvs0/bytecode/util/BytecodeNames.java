@@ -1,7 +1,8 @@
 package io.github.cvs0.bytecode.util;
 
 /**
- * Conventions for JVM internal names vs dotted/binary names and JAR entry paths.
+ * Single place for JVM internal vs binary naming and related path rules. Used by the CLI, dependency analysis,
+ * {@link io.github.cvs0.bytecode.util.JarGraphMetadataReconciler}, and anywhere else internal names appear.
  */
 public final class BytecodeNames {
 
@@ -35,5 +36,34 @@ public final class BytecodeNames {
             return null;
         }
         return entryName.substring(0, entryName.length() - ".class".length());
+    }
+
+    /**
+     * Containing JVM package in internal form (slashes, e.g. {@code com/foo} for {@code com/foo/Bar}).
+     * The default package is {@code ""}.
+     */
+    public static String internalNameToPackage(String internalName) {
+        if (internalName == null || internalName.isEmpty()) {
+            return "";
+        }
+        int i = internalName.lastIndexOf('/');
+        return i < 0 ? "" : internalName.substring(0, i);
+    }
+
+    /**
+     * Internal names that normally resolve from the JDK / bootstrap loaders. Renaming such a type if it appears as
+     * bytecode in a JAR would desync from what the JVM actually loads, so class rewrites skip them.
+     */
+    public static boolean isJvmRuntimeType(String internalName) {
+        if (internalName == null || internalName.isEmpty()) {
+            return false;
+        }
+        return internalName.startsWith("java/")
+                || internalName.startsWith("javax/")
+                || internalName.startsWith("jdk/")
+                || internalName.startsWith("sun/")
+                || internalName.startsWith("com/sun/")
+                || internalName.startsWith("org/w3c/")
+                || internalName.startsWith("org/xml/");
     }
 }

@@ -8,6 +8,8 @@ import java.util.Map;
 /**
  * Rewrites JVM descriptors and signatures when internal class names change.
  * Replaces object types as {@code Linternal/name;} segments (longest keys first to avoid partial matches).
+ *
+ * @see io.github.cvs0.bytecode.transform.ClassTransformer
  */
 public final class DescriptorRemapper {
 

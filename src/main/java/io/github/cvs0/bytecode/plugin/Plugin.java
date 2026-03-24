@@ -3,8 +3,9 @@ package io.github.cvs0.bytecode.plugin;
 import io.github.cvs0.bytecode.JarMapping;
 
 /**
- * Interface for plugins that can be registered with the PluginManager and process JarMapping contents.
- * Plugins can provide initialization, processing, and cleanup logic, as well as metadata.
+ * One stage in the pipeline managed by {@link PluginManager}: {@link #process(JarMapping)} mutates a shared
+ * {@link JarMapping} (typically after {@link io.github.cvs0.bytecode.util.JarReader} and before
+ * {@link io.github.cvs0.bytecode.util.JarWriter}).
  */
 public interface Plugin {
     /**
