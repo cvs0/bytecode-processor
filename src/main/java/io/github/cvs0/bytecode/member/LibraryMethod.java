@@ -29,6 +29,7 @@ public class LibraryMethod {
     @Getter
     @Setter
     private LibraryClass owner;
+    
     private final List<Attribute> attributes = new ArrayList<>();
 
     public LibraryMethod(String name, String descriptor, int access) {
