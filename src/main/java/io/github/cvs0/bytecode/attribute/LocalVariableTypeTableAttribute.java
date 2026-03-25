@@ -1,6 +1,5 @@
 package io.github.cvs0.bytecode.attribute;
 
-import io.github.cvs0.bytecode.member.LocalVariable;
 import lombok.Getter;
 import lombok.Setter;
 
