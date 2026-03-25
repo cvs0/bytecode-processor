@@ -50,7 +50,7 @@ Releases are on **Maven Central**. Replace `VERSION` with the latest release (se
 <classifier>all</classifier>
 ```
 
-**Snapshots** (e.g. `1.2.2-SNAPSHOT`) are published to [GitHub Packages](https://github.com/cvs0/bytecode-processor/packages) on pushes to `development`. Add the `https://maven.pkg.github.com/cvs0/bytecode-processor` repository and authenticate as [GitHub documents for Packages](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry).
+**Snapshots** (e.g. `1.2.3-SNAPSHOT`) are published to [GitHub Packages](https://github.com/cvs0/bytecode-processor/packages) on pushes to `development`. Add the `https://maven.pkg.github.com/cvs0/bytecode-processor` repository and authenticate as [GitHub documents for Packages](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry).
 
 ### IDE / modules
 
