@@ -9,6 +9,7 @@ import io.github.cvs0.bytecode.util.JarReader;
 import io.github.cvs0.bytecode.util.JarWriter;
 import io.github.cvs0.bytecode.util.ManifestPatcher;
 import io.github.cvs0.bytecode.util.ServiceLoaderResourcePatcher;
+import lombok.Getter;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,11 +21,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * In-memory model of a JAR: every {@code .class} entry (as {@link ProgramClass}), {@link ModuleInfoClass module
  * descriptors}, {@link PackageInfoClass package-info}, {@link LibraryClass library} stubs, and all non-class resources.
  *
- * <p>All bytecode-backed types are {@link ProgramClass} (keyed by {@linkplain ProgramClass#getJarEntryName() JAR entry path},
- * including multi-release variants). {@link ProgramClass#isEmbeddedLibrary()} distinguishes shaded dependencies from
- * the application. {@link #getApplicationClasses()} is for host-project transforms; {@link #getProgramClasses()} returns
- * every loaded class. {@link #getProgramClass(String)} resolves by internal (slash) name and returns an arbitrary match
- * when several entries share the same name.</p>
+ * <p>Program classes are indexed by both JAR entry path and internal name. {@link #getProgramClass(String)} resolves
+ * by internal (slash) name in O(1). For multi-release JARs, the base-path class takes precedence; use
+ * {@link #getProgramClassVersions(String)} when you need all version-specific entries.</p>
+ *
+ * <p>{@link ProgramClass#isApplicationClass()} distinguishes the host project from shaded dependencies.
+ * {@link #getApplicationClasses()} returns only host-project classes; {@link #getProgramClasses()} returns every
+ * loaded class.</p>
  *
  * <p><b>Lifecycle</b> — Load with {@link JarReader#read(java.io.File, JarMapping)}; transform with
  * {@link io.github.cvs0.bytecode.transform.ClassTransformer} and/or {@link io.github.cvs0.bytecode.plugin.PluginManager};
@@ -39,12 +42,20 @@ import java.util.concurrent.ConcurrentHashMap;
 public class JarMapping {
     /**
      * Program classes keyed by JAR entry path (e.g. {@code com/foo/Bar.class}), unique per {@code ZipEntry}.
+     * Used for JAR writing and multi-release version tracking.
      */
     private final Map<String, ProgramClass> programClassesByJarEntry = new ConcurrentHashMap<>();
+    /**
+     * Primary index: program classes keyed by internal name (e.g. {@code com/foo/Bar}). For single-version JARs,
+     * this is a 1:1 mapping. For multi-release JARs, the base-path entry takes precedence.
+     */
+    private final Map<String, ProgramClass> programClassesByName = new ConcurrentHashMap<>();
     private final Map<String, LibraryClass> libraryClasses = new ConcurrentHashMap<>();
     private final Map<String, byte[]> resources = new ConcurrentHashMap<>();
     private final Map<String, ModuleInfoClass> moduleInfos = new ConcurrentHashMap<>();
     private final Map<String, PackageInfoClass> packageInfos = new ConcurrentHashMap<>();
+
+    @Getter
     private final String jarPath;
 
     public JarMapping(String jarPath) {
@@ -124,6 +135,11 @@ public class JarMapping {
     public void addClass(ProgramClass clazz) {
         Objects.requireNonNull(clazz, "clazz");
         programClassesByJarEntry.put(clazz.getJarEntryName(), clazz);
+        // Base-path entries take precedence over multi-release entries in the name index
+        String name = clazz.getName();
+        if (!clazz.getJarEntryName().startsWith("META-INF/versions/") || !programClassesByName.containsKey(name)) {
+            programClassesByName.put(name, clazz);
+        }
     }
 
     public void addLibraryClass(LibraryClass clazz) {
@@ -183,15 +199,25 @@ public class JarMapping {
 
     /**
      * Returns a bytecode-backed class by internal (slash) name, or {@code null}. Includes embedded libraries and
-     * application classes. If several JAR entries share the same internal name (e.g. multi-release), one of them is returned.
+     * application classes. For multi-release JARs, returns the base-path entry; use {@link #getProgramClassVersions}
+     * when you need all version-specific entries.
      */
     public ProgramClass getProgramClass(String name) {
+        return programClassesByName.get(name);
+    }
+
+    /**
+     * Returns all entries for a given internal name (multi-release aware). For single-version JARs, this returns at
+     * most one element.
+     */
+    public List<ProgramClass> getProgramClassVersions(String name) {
+        List<ProgramClass> out = new ArrayList<>();
         for (ProgramClass c : programClassesByJarEntry.values()) {
             if (name.equals(c.getName())) {
-                return c;
+                out.add(c);
             }
         }
-        return null;
+        return out;
     }
 
     public LibraryClass getLibraryClass(String name) {
@@ -210,12 +236,12 @@ public class JarMapping {
     }
 
     /**
-     * Subset that {@link io.github.cvs0.bytecode.util.JarLibraryClassifier} marked as the host application (not shaded deps).
+     * Subset of program classes that belong to the host application (not shaded dependencies).
      */
     public Collection<ProgramClass> getApplicationClasses() {
         List<ProgramClass> out = new ArrayList<>();
         for (ProgramClass c : programClassesByJarEntry.values()) {
-            if (!c.isEmbeddedLibrary()) {
+            if (c.isApplicationClass()) {
                 out.add(c);
             }
         }
@@ -223,12 +249,12 @@ public class JarMapping {
     }
 
     /**
-     * Embedded third-party bytecode in the same JAR (full {@link org.objectweb.asm.tree.ClassNode} like application classes).
+     * Embedded third-party bytecode in the same JAR (shaded dependencies).
      */
     public Collection<ProgramClass> getEmbeddedLibraryProgramClasses() {
         List<ProgramClass> out = new ArrayList<>();
         for (ProgramClass c : programClassesByJarEntry.values()) {
-            if (c.isEmbeddedLibrary()) {
+            if (!c.isApplicationClass()) {
                 out.add(c);
             }
         }
@@ -244,19 +270,10 @@ public class JarMapping {
     }
 
     public void removeClass(String name) {
-        for (Iterator<Map.Entry<String, ProgramClass>> it = programClassesByJarEntry.entrySet().iterator();
-                it.hasNext(); ) {
-            if (name.equals(it.next().getValue().getName())) {
-                it.remove();
-            }
-        }
+        programClassesByName.remove(name);
+        programClassesByJarEntry.entrySet().removeIf(e -> name.equals(e.getValue().getName()));
         libraryClasses.remove(name);
-        for (var pit = packageInfos.entrySet().iterator(); pit.hasNext(); ) {
-            var e = pit.next();
-            if (name.equals(e.getValue().getInternalName())) {
-                pit.remove();
-            }
-        }
+        packageInfos.entrySet().removeIf(e -> name.equals(e.getValue().getInternalName()));
     }
 
     public void removeResource(String name) {
@@ -266,18 +283,35 @@ public class JarMapping {
     public void renameClass(String oldName, String newName) {
         Objects.requireNonNull(oldName, "oldName");
         Objects.requireNonNull(newName, "newName");
+
+        // Update name index
+        ProgramClass indexed = programClassesByName.remove(oldName);
+
+        // Update all jar-entry-keyed entries with matching internal name
         List<ProgramClass> toRename = new ArrayList<>();
         for (ProgramClass pc : programClassesByJarEntry.values()) {
             if (oldName.equals(pc.getName())) {
                 toRename.add(pc);
             }
         }
+        ProgramClass baseEntry = null;
         for (ProgramClass programClass : toRename) {
             String oldKey = programClass.getJarEntryName();
+            programClassesByJarEntry.remove(oldKey);
             programClass.remapJarEntryPath(oldName, newName);
             programClass.setName(newName);
-            programClassesByJarEntry.remove(oldKey);
             programClassesByJarEntry.put(programClass.getJarEntryName(), programClass);
+            if (!programClass.getJarEntryName().startsWith("META-INF/versions/")) {
+                baseEntry = programClass;
+            }
+        }
+        // Re-index: prefer the base entry, otherwise the previously indexed one (now renamed)
+        if (baseEntry != null) {
+            programClassesByName.put(newName, baseEntry);
+        } else if (indexed != null) {
+            programClassesByName.put(newName, indexed);
+        } else if (!toRename.isEmpty()) {
+            programClassesByName.put(newName, toRename.getFirst());
         }
 
         LibraryClass libraryClass = libraryClasses.remove(oldName);
@@ -307,10 +341,6 @@ public class JarMapping {
         JarWriter.write(this, outputPath);
     }
 
-    public String getJarPath() {
-        return jarPath;
-    }
-
     public int getTotalClassCount() {
         return programClassesByJarEntry.size()
                 + libraryClasses.size()
@@ -331,22 +361,11 @@ public class JarMapping {
     }
 
     public boolean containsClass(String name) {
-        if (libraryClasses.containsKey(name)) {
-            return true;
-        }
-        for (ProgramClass c : programClassesByJarEntry.values()) {
-            if (name.equals(c.getName())) {
-                return true;
-            }
-        }
-        return false;
+        return programClassesByName.containsKey(name) || libraryClasses.containsKey(name);
     }
 
     public List<String> getAllClassNames() {
-        LinkedHashSet<String> names = new LinkedHashSet<>();
-        for (ProgramClass c : programClassesByJarEntry.values()) {
-            names.add(c.getName());
-        }
+        LinkedHashSet<String> names = new LinkedHashSet<>(programClassesByName.keySet());
         names.addAll(libraryClasses.keySet());
         return new ArrayList<>(names);
     }

@@ -1,5 +1,8 @@
 package io.github.cvs0.bytecode.attribute;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -8,10 +11,12 @@ import java.util.Map;
  * Provides methods for querying and modifying attribute metadata, as well as type checks for standard attributes.
  */
 public class Attribute {
+    @Getter
+    @Setter
     private String name;
     private byte[] data;
     private Map<String, Object> properties;
-    
+
     /**
      * Constructs an Attribute with the given name.
      * @param name the attribute name
@@ -30,22 +35,6 @@ public class Attribute {
         this.name = name;
         this.data = data != null ? data.clone() : null;
         this.properties = new HashMap<>();
-    }
-
-    /**
-     * Gets the attribute name.
-     * @return the attribute name
-     */
-    public String getName() {
-        return name;
-    }
-
-    /**
-     * Sets the attribute name.
-     * @param name the new attribute name
-     */
-    public void setName(String name) {
-        this.name = name;
     }
 
     /**
@@ -112,7 +101,7 @@ public class Attribute {
      * @return true if annotation
      */
     public boolean isAnnotation() {
-        return "RuntimeVisibleAnnotations".equals(name) || 
+        return "RuntimeVisibleAnnotations".equals(name) ||
                "RuntimeInvisibleAnnotations".equals(name) ||
                "RuntimeVisibleParameterAnnotations".equals(name) ||
                "RuntimeInvisibleParameterAnnotations".equals(name);
@@ -252,9 +241,9 @@ public class Attribute {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        
+
         Attribute attribute = (Attribute) o;
-        
+
         if (!name.equals(attribute.name)) return false;
         return properties.equals(attribute.properties);
     }
