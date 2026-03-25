@@ -15,7 +15,7 @@
     <properties>
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <bytecode.processor.version>1.2.2</bytecode.processor.version>
+        <bytecode.processor.version>1.2.3-SNAPSHOT</bytecode.processor.version>
     </properties>
 
     <dependencies>

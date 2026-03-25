@@ -23,8 +23,10 @@ public final class DemoApp {
         JarStatistics stats = JarStatistics.from(mapping);
 
         System.out.println("JAR: " + jar);
-        System.out.println("Program classes:   " + stats.getProgramClassCount());
-        System.out.println("Library classes:   " + stats.getLibraryClassCount());
+        System.out.println("Application:       " + stats.getApplicationClassCount());
+        System.out.println("Embedded libs:     " + stats.getEmbeddedLibraryClassCount());
+        System.out.println("Total classes:     " + stats.getTotalModeledClassCount());
+        System.out.println("Library total:     " + stats.getLibraryClassCount());
         System.out.println("Resources:         " + stats.getResourceCount());
         System.out.println("Methods / fields:  " + stats.getTotalMethods() + " / " + stats.getTotalFields());
         System.out.println("Interfaces:        " + stats.getInterfaceCount());

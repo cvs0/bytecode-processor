@@ -1,5 +1,8 @@
 package io.github.cvs0.bytecode.attribute;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -10,14 +13,14 @@ import java.util.List;
  */
 public class MethodParametersAttribute extends Attribute {
     private final List<Parameter> parameters = new ArrayList<>();
-    
+
     /**
      * Constructs a MethodParametersAttribute.
      */
     public MethodParametersAttribute() {
         super("MethodParameters");
     }
-    
+
     /**
      * Adds a parameter entry to this attribute.
      * @param parameter the parameter entry
@@ -25,7 +28,7 @@ public class MethodParametersAttribute extends Attribute {
     public void addParameter(Parameter parameter) {
         parameters.add(parameter);
     }
-    
+
     /**
      * Removes a parameter entry from this attribute.
      * @param parameter the parameter entry
@@ -33,7 +36,7 @@ public class MethodParametersAttribute extends Attribute {
     public void removeParameter(Parameter parameter) {
         parameters.remove(parameter);
     }
-    
+
     /**
      * Returns all parameter entries in this attribute.
      * @return unmodifiable list of parameters
@@ -41,7 +44,7 @@ public class MethodParametersAttribute extends Attribute {
     public List<Parameter> getParameters() {
         return Collections.unmodifiableList(parameters);
     }
-    
+
     /**
      * Returns the number of parameter entries in this attribute.
      * @return the parameter count
@@ -49,14 +52,14 @@ public class MethodParametersAttribute extends Attribute {
     public int getParameterCount() {
         return parameters.size();
     }
-    
+
     /**
      * Removes all parameter entries from this attribute.
      */
     public void clearParameters() {
         parameters.clear();
     }
-    
+
     /**
      * Returns a string representation of this attribute.
      * @return a string with the number of parameters
@@ -67,7 +70,7 @@ public class MethodParametersAttribute extends Attribute {
                 "parameters=" + parameters.size() +
                 '}';
     }
-    
+
     /**
      * Checks equality with another object.
      * @param o the other object
@@ -97,10 +100,12 @@ public class MethodParametersAttribute extends Attribute {
      * Represents a single method parameter entry, including its name and access flags.
      * Provides methods for accessing and modifying parameter metadata.
      */
+    @Setter
+    @Getter
     public static class Parameter {
         private String name;
         private int access;
-        
+
         /**
          * Constructs a Parameter with the given name and access flags.
          * @param name the parameter name
@@ -110,39 +115,7 @@ public class MethodParametersAttribute extends Attribute {
             this.name = name;
             this.access = access;
         }
-        
-        /**
-         * Gets the parameter name.
-         * @return the parameter name
-         */
-        public String getName() {
-            return name;
-        }
-        
-        /**
-         * Sets the parameter name.
-         * @param name the new parameter name
-         */
-        public void setName(String name) {
-            this.name = name;
-        }
-        
-        /**
-         * Gets the access flags for this parameter.
-         * @return the access flags
-         */
-        public int getAccess() {
-            return access;
-        }
-        
-        /**
-         * Sets the access flags for this parameter.
-         * @param access the new access flags
-         */
-        public void setAccess(int access) {
-            this.access = access;
-        }
-        
+
         /**
          * Returns a string representation of this parameter.
          * @return a string with the name and access flags
@@ -154,7 +127,7 @@ public class MethodParametersAttribute extends Attribute {
                     ", access=" + access +
                     '}';
         }
-        
+
         /**
          * Checks equality with another object.
          * @param o the other object
@@ -168,7 +141,7 @@ public class MethodParametersAttribute extends Attribute {
             if (access != that.access) return false;
             return name != null ? name.equals(that.name) : that.name == null;
         }
-        
+
         /**
          * Returns a hash code for this parameter.
          * @return the hash code

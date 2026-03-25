@@ -1,11 +1,15 @@
 package io.github.cvs0.bytecode.member;
 
-import io.github.cvs0.bytecode.util.ObjectUtils;
+import java.util.Objects;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * Represents a local variable in a method, including its name, type, scope, and index.
  * Provides utility methods for querying variable properties and type information.
  */
+@Getter
+@Setter
 public class LocalVariable {
     private final String name;
     private String descriptor;
@@ -46,86 +50,6 @@ public class LocalVariable {
         this.startPc = startPc;
         this.length = length;
         this.index = index;
-    }
-
-    /**
-     * Returns the variable name.
-     * @return the name
-     */
-    public String getName() {
-        return name;
-    }
-
-    /**
-     * Returns the type descriptor.
-     * @return the descriptor
-     */
-    public String getDescriptor() {
-        return descriptor;
-    }
-
-    /**
-     * Sets the type descriptor.
-     * @param descriptor the new descriptor
-     */
-    public void setDescriptor(String descriptor) {
-        this.descriptor = descriptor;
-    }
-
-    /**
-     * Returns the generic signature, or null if not present.
-     * @return the signature
-     */
-    public String getSignature() {
-        return signature;
-    }
-
-    /**
-     * Sets the generic signature.
-     * @param signature the new signature
-     */
-    public void setSignature(String signature) {
-        this.signature = signature;
-    }
-
-    /**
-     * Returns the start program counter for this variable's scope.
-     * @return the start PC
-     */
-    public int getStartPc() {
-        return startPc;
-    }
-
-    /**
-     * Sets the start program counter.
-     * @param startPc the new start PC
-     */
-    public void setStartPc(int startPc) {
-        this.startPc = startPc;
-    }
-
-    /**
-     * Returns the length of this variable's scope.
-     * @return the length
-     */
-    public int getLength() {
-        return length;
-    }
-
-    /**
-     * Sets the length of this variable's scope.
-     * @param length the new length
-     */
-    public void setLength(int length) {
-        this.length = length;
-    }
-
-    /**
-     * Returns the variable index in the local variable table.
-     * @return the index
-     */
-    public int getIndex() {
-        return index;
     }
 
     /**
@@ -211,9 +135,9 @@ public class LocalVariable {
         return startPc == that.startPc &&
                length == that.length &&
                index == that.index &&
-               ObjectUtils.equals(name, that.name) &&
-               ObjectUtils.equals(descriptor, that.descriptor) &&
-               ObjectUtils.equals(signature, that.signature);
+               Objects.equals(name, that.name) &&
+               Objects.equals(descriptor, that.descriptor) &&
+               Objects.equals(signature, that.signature);
     }
 
     /**
@@ -221,6 +145,6 @@ public class LocalVariable {
      */
     @Override
     public int hashCode() {
-        return ObjectUtils.combinedHashCode(name, descriptor, signature, startPc, length, index);
+        return Objects.hash(name, descriptor, signature, startPc, length, index);
     }
 }

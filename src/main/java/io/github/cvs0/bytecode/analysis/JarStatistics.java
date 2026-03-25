@@ -2,15 +2,20 @@ package io.github.cvs0.bytecode.analysis;
 
 import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 
 import java.util.Collection;
 
 /**
- * Aggregated counts for a {@link JarMapping}: classes, members, resources, and simple structural flags.
+ * Aggregated counts for a {@link JarMapping}: application vs embedded library classes, members, resources, and flags.
  */
+@Getter
+@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public final class JarStatistics {
-    private final int programClassCount;
-    private final int libraryClassCount;
+    private final int applicationClassCount;
+    private final int embeddedLibraryClassCount;
     private final int resourceCount;
     private final int interfaceCount;
     private final int abstractClassCount;
@@ -21,29 +26,19 @@ public final class JarStatistics {
     private final int moduleDescriptorCount;
     private final int packageInfoCount;
 
-    private JarStatistics(
-            int programClassCount,
-            int libraryClassCount,
-            int resourceCount,
-            int interfaceCount,
-            int abstractClassCount,
-            int finalClassCount,
-            int publicClassCount,
-            int totalMethods,
-            int totalFields,
-            int moduleDescriptorCount,
-            int packageInfoCount) {
-        this.programClassCount = programClassCount;
-        this.libraryClassCount = libraryClassCount;
-        this.resourceCount = resourceCount;
-        this.interfaceCount = interfaceCount;
-        this.abstractClassCount = abstractClassCount;
-        this.finalClassCount = finalClassCount;
-        this.publicClassCount = publicClassCount;
-        this.totalMethods = totalMethods;
-        this.totalFields = totalFields;
-        this.moduleDescriptorCount = moduleDescriptorCount;
-        this.packageInfoCount = packageInfoCount;
+    /**
+     * All modeled {@code .class} entries ({@link ProgramClass}.
+     */
+    public int getTotalModeledClassCount() {
+        return applicationClassCount + embeddedLibraryClassCount;
+    }
+
+
+    /**
+     * Embedded {@link ProgramClass} entries.
+     */
+    public int getLibraryClassCount() {
+        return embeddedLibraryClassCount;
     }
 
     /**
@@ -51,6 +46,8 @@ public final class JarStatistics {
      */
     public static JarStatistics from(JarMapping mapping) {
         Collection<ProgramClass> classes = mapping.getProgramClasses();
+        int application = 0;
+        int embedded = 0;
         int interfaces = 0;
         int abstractClasses = 0;
         int finals = 0;
@@ -58,6 +55,11 @@ public final class JarStatistics {
         int methods = 0;
         int fields = 0;
         for (ProgramClass clazz : classes) {
+            if (!clazz.isApplicationClass()) {
+                embedded++;
+            } else {
+                application++;
+            }
             if (clazz.isInterface()) {
                 interfaces++;
             }
@@ -74,8 +76,8 @@ public final class JarStatistics {
             fields += clazz.getFields().size();
         }
         return new JarStatistics(
-                classes.size(),
-                mapping.getLibraryClasses().size(),
+                application,
+                embedded,
                 mapping.getResourceCount(),
                 interfaces,
                 abstractClasses,
@@ -85,49 +87,5 @@ public final class JarStatistics {
                 fields,
                 mapping.getModuleInfoCount(),
                 mapping.getPackageInfoCount());
-    }
-
-    public int getProgramClassCount() {
-        return programClassCount;
-    }
-
-    public int getLibraryClassCount() {
-        return libraryClassCount;
-    }
-
-    public int getResourceCount() {
-        return resourceCount;
-    }
-
-    public int getInterfaceCount() {
-        return interfaceCount;
-    }
-
-    public int getAbstractClassCount() {
-        return abstractClassCount;
-    }
-
-    public int getFinalClassCount() {
-        return finalClassCount;
-    }
-
-    public int getPublicClassCount() {
-        return publicClassCount;
-    }
-
-    public int getTotalMethods() {
-        return totalMethods;
-    }
-
-    public int getTotalFields() {
-        return totalFields;
-    }
-
-    public int getModuleDescriptorCount() {
-        return moduleDescriptorCount;
-    }
-
-    public int getPackageInfoCount() {
-        return packageInfoCount;
     }
 }

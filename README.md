@@ -50,7 +50,7 @@ Releases are on **Maven Central**. Replace `VERSION` with the latest release (se
 <classifier>all</classifier>
 ```
 
-**Snapshots** (e.g. `1.2.1-SNAPSHOT`) are published to [GitHub Packages](https://github.com/cvs0/bytecode-processor/packages) on pushes to `development`. Add the `https://maven.pkg.github.com/cvs0/bytecode-processor` repository and authenticate as [GitHub documents for Packages](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry).
+**Snapshots** (e.g. `1.2.3-SNAPSHOT`) are published to [GitHub Packages](https://github.com/cvs0/bytecode-processor/packages) on pushes to `development`. Add the `https://maven.pkg.github.com/cvs0/bytecode-processor` repository and authenticate as [GitHub documents for Packages](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry).
 
 ### IDE / modules
 
@@ -95,7 +95,7 @@ mvn test      # unit tests only
 mvn package   # library + shaded JAR
 ```
 
-Coverage: `target/site/jacoco/index.html` after `verify`.
+Coverage: `target/site/*/index.html` after `verify`.
 
 **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): `mvn -B verify` on pushes/PRs to `main`, `master`, `develop`, `development`, and `release/**`. Tags `v*` attach both JARs to a GitHub Release.
 

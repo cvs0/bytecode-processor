@@ -43,7 +43,7 @@
     </distributionManagement>
 
     <properties>
-        <revision>1.2.2</revision>
+        <revision>1.2.3-SNAPSHOT</revision>
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -184,6 +184,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <integrationTest.shadedJar>${project.build.directory}/${project.build.finalName}-all.jar</integrationTest.shadedJar>
+                        <integrationTest.libraryJar>${project.build.directory}/${project.build.finalName}.jar</integrationTest.libraryJar>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
@@ -211,7 +212,6 @@
                                     <artifact>*:*</artifact>
                                     <excludes>
                                         <exclude>module-info.class</exclude>
-                                        <exclude>META-INF/versions/*/module-info.class</exclude>
                                     </excludes>
                                 </filter>
                             </filters>
@@ -308,16 +308,6 @@
                                 </configuration>
                             </execution>
                         </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.sonatype.central</groupId>
-                        <artifactId>central-publishing-maven-plugin</artifactId>
-                        <version>0.7.0</version>
-                        <extensions>true</extensions>
-                        <configuration>
-                            <publishingServerId>central</publishingServerId>
-                            <autoPublish>true</autoPublish>
-                        </configuration>
                     </plugin>
                 </plugins>
             </build>

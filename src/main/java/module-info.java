@@ -13,7 +13,7 @@ module bytecode.processor {
     exports io.github.cvs0.bytecode.clazz;
     exports io.github.cvs0.bytecode.instruction;
     exports io.github.cvs0.bytecode.plugin;
-    exports io.github.cvs0.bytecode.test;
+    exports io.github.cvs0.bytecode.cli;
     exports io.github.cvs0.bytecode.transform;
 
     opens io.github.cvs0.bytecode.cli to info.picocli;

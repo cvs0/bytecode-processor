@@ -11,19 +11,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class JarMappingTest {
-    
+
     private JarMapping jarMapping;
-    
+
     @TempDir
     Path tempDir;
-    
+
     @BeforeEach
     void setUp() {
         jarMapping = new JarMapping("test.jar");
@@ -46,75 +44,75 @@ class JarMappingTest {
     void testAddAndGetProgramClass() {
         ProgramClass clazz = new ProgramClass("com/example/TestClass");
         jarMapping.addClass(clazz);
-        
+
         assertEquals(clazz, jarMapping.getProgramClass("com/example/TestClass"));
         assertEquals(1, jarMapping.getProgramClasses().size());
         assertTrue(jarMapping.containsClass("com/example/TestClass"));
     }
-    
+
     @Test
     void testAddAndGetLibraryClass() {
         LibraryClass clazz = new LibraryClass("java/lang/String");
         jarMapping.addLibraryClass(clazz);
-        
+
         assertEquals(clazz, jarMapping.getLibraryClass("java/lang/String"));
         assertEquals(1, jarMapping.getLibraryClasses().size());
         assertTrue(jarMapping.containsClass("java/lang/String"));
     }
-    
+
     @Test
     void testAddAndGetResource() {
         byte[] data = "test resource content".getBytes();
         jarMapping.addResource("META-INF/MANIFEST.MF", data);
-        
+
         assertArrayEquals(data, jarMapping.getResource("META-INF/MANIFEST.MF"));
         assertEquals(1, jarMapping.getResourceCount());
         assertTrue(jarMapping.getResourceNames().contains("META-INF/MANIFEST.MF"));
     }
-    
+
     @Test
     void testRemoveClass() {
         ProgramClass clazz = new ProgramClass("com/example/TestClass");
         jarMapping.addClass(clazz);
-        
+
         assertTrue(jarMapping.containsClass("com/example/TestClass"));
-        
+
         jarMapping.removeClass("com/example/TestClass");
-        
+
         assertFalse(jarMapping.containsClass("com/example/TestClass"));
         assertNull(jarMapping.getProgramClass("com/example/TestClass"));
     }
-    
+
     @Test
     void testRenameClass() {
         ProgramClass clazz = new ProgramClass("com/example/OldName");
         jarMapping.addClass(clazz);
-        
+
         jarMapping.renameClass("com/example/OldName", "com/example/NewName");
-        
+
         assertNull(jarMapping.getProgramClass("com/example/OldName"));
         assertNotNull(jarMapping.getProgramClass("com/example/NewName"));
         assertEquals("com/example/NewName", jarMapping.getProgramClass("com/example/NewName").getName());
     }
-    
+
     @Test
     void testGetAllClassNames() {
         jarMapping.addClass(new ProgramClass("com/example/Class1"));
         jarMapping.addClass(new ProgramClass("com/example/Class2"));
         jarMapping.addLibraryClass(new LibraryClass("java/lang/String"));
-        
+
         assertEquals(3, jarMapping.getAllClassNames().size());
         assertTrue(jarMapping.getAllClassNames().contains("com/example/Class1"));
         assertTrue(jarMapping.getAllClassNames().contains("com/example/Class2"));
         assertTrue(jarMapping.getAllClassNames().contains("java/lang/String"));
     }
-    
+
     @Test
     void testGetTotalClassCount() {
         jarMapping.addClass(new ProgramClass("com/example/Class1"));
         jarMapping.addClass(new ProgramClass("com/example/Class2"));
         jarMapping.addLibraryClass(new LibraryClass("java/lang/String"));
-        
+
         assertEquals(3, jarMapping.getTotalClassCount());
     }
 
@@ -140,9 +138,83 @@ class JarMappingTest {
         assertNotNull(jarMapping.getModuleInfo("module-info.class"));
         assertNotNull(jarMapping.getPackageInfo("com/example/package-info.class"));
     }
-    
+
     @Test
     void testJarPath() {
         assertEquals("test.jar", jarMapping.getJarPath());
+    }
+
+    @Test
+    void addClassOverwritesByName() {
+        ProgramClass first = new ProgramClass("com/example/Dup");
+        ProgramClass second = new ProgramClass("com/example/Dup");
+        jarMapping.addClass(first);
+        jarMapping.addClass(second);
+        assertSame(second, jarMapping.getProgramClass("com/example/Dup"));
+    }
+
+    @Test
+    void getApplicationClassesFiltersEmbedded() {
+        ProgramClass app = new ProgramClass("app/Main");
+        ProgramClass lib = new ProgramClass("shaded/Dep");
+        lib.setApplicationClass(false);
+        jarMapping.addClass(app);
+        jarMapping.addClass(lib);
+
+        assertEquals(1, jarMapping.getApplicationClasses().size());
+        assertTrue(jarMapping.getApplicationClasses().stream().anyMatch(c -> "app/Main".equals(c.getName())));
+    }
+
+    @Test
+    void getEmbeddedLibraryProgramClassesFiltersApplication() {
+        ProgramClass app = new ProgramClass("app/Main");
+        ProgramClass lib = new ProgramClass("shaded/Dep");
+        lib.setApplicationClass(false);
+        jarMapping.addClass(app);
+        jarMapping.addClass(lib);
+
+        assertEquals(1, jarMapping.getEmbeddedLibraryProgramClasses().size());
+        assertTrue(jarMapping.getEmbeddedLibraryProgramClasses().stream().anyMatch(c -> "shaded/Dep".equals(c.getName())));
+    }
+
+    @Test
+    void renameClassUpdatesJarEntryPath() {
+        ProgramClass clazz = new ProgramClass("com/old/Name");
+        jarMapping.addClass(clazz);
+
+        jarMapping.renameClass("com/old/Name", "com/new/Name");
+
+        assertEquals("com/new/Name.class", clazz.getJarEntryName());
+    }
+
+    @Test
+    void renameClassRemovesOldJarEntryKey() {
+        ProgramClass clazz = new ProgramClass("com/old/Name");
+        jarMapping.addClass(clazz);
+
+        jarMapping.renameClass("com/old/Name", "com/new/Name");
+
+        // Old entry key should be gone; iterating all classes shows only the renamed one
+        assertEquals(1, jarMapping.getProgramClasses().size());
+        assertEquals("com/new/Name", jarMapping.getProgramClasses().iterator().next().getName());
+    }
+
+    @Test
+    void removeClassCleansUpBothIndices() {
+        ProgramClass clazz = new ProgramClass("a/B");
+        jarMapping.addClass(clazz);
+
+        jarMapping.removeClass("a/B");
+
+        assertNull(jarMapping.getProgramClass("a/B"));
+        assertFalse(jarMapping.containsClass("a/B"));
+        assertEquals(0, jarMapping.getProgramClasses().size());
+    }
+
+    @Test
+    void renameNonExistentClassIsNoOp() {
+        jarMapping.renameClass("no/Such", "no/Other");
+        assertNull(jarMapping.getProgramClass("no/Such"));
+        assertNull(jarMapping.getProgramClass("no/Other"));
     }
 }
