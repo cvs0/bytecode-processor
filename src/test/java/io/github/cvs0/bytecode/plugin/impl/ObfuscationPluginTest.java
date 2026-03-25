@@ -43,7 +43,7 @@ class ObfuscationPluginTest {
         p.process(m);
 
         assertNull(m.getProgramClass("app/Demo"));
-        ProgramClass obf = m.getProgramClass("t0");
+        ProgramClass obf = m.getProgramClass("app/t0");
         assertNotNull(obf);
         assertNotNull(obf.getField("C"), "static final field name preserved");
         assertNotNull(obf.getField("t1"), "instance field obfuscated");

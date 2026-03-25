@@ -95,7 +95,7 @@ mvn test      # unit tests only
 mvn package   # library + shaded JAR
 ```
 
-Coverage: `target/site/jacoco/index.html` after `verify`.
+Coverage: `target/site/*/index.html` after `verify`.
 
 **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): `mvn -B verify` on pushes/PRs to `main`, `master`, `develop`, `development`, and `release/**`. Tags `v*` attach both JARs to a GitHub Release.
 

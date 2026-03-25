@@ -54,6 +54,7 @@ public final class BytecodeNames {
      * Internal names that normally resolve from the JDK / bootstrap loaders. Renaming such a type if it appears as
      * bytecode in a JAR would desync from what the JVM actually loads, so class rewrites skip them.
      */
+    // TODO: Handle this not hardcoded.
     public static boolean isJvmRuntimeType(String internalName) {
         if (internalName == null || internalName.isEmpty()) {
             return false;
@@ -64,6 +65,45 @@ public final class BytecodeNames {
                 || internalName.startsWith("sun/")
                 || internalName.startsWith("com/sun/")
                 || internalName.startsWith("org/w3c/")
-                || internalName.startsWith("org/xml/");
+                || internalName.startsWith("org/xml/")
+                || internalName.startsWith("org/ietf/");
+    }
+
+    /**
+     * Returns {@code true} for well-known open-source library prefixes that are commonly shaded into fat JARs. These
+     * types should not have their <em>members</em> renamed because they interact with the JVM or frameworks by stable
+     * names (annotation processors, bytecode libraries, logging facades, etc.).
+     *
+     * <p>This is intentionally a short, conservative list. The {@link JarReader} already protects most
+     * embedded libraries by marking them as non-application classes. This method acts as a secondary safety net when
+     * the reader cannot run or when the caller needs a quick check.</p>
+     */
+    // TODO: Remove this and come up with a smarter way to determine if a package is thirdparty
+    public static boolean isKnownThirdPartyRuntime(String internalName) {
+        if (internalName == null || internalName.isEmpty()) {
+            return false;
+        }
+        return internalName.startsWith("org/objectweb/asm/")
+                || internalName.startsWith("org/objectweb/")
+                || internalName.startsWith("picocli/")
+                || internalName.startsWith("org/slf4j/")
+                || internalName.startsWith("org/apache/logging/")
+                || internalName.startsWith("org/apache/commons/")
+                || internalName.startsWith("com/google/gson/")
+                || internalName.startsWith("com/google/common/")
+                || internalName.startsWith("com/fasterxml/jackson/")
+                || internalName.startsWith("org/junit/")
+                || internalName.startsWith("kotlin/")
+                || internalName.startsWith("kotlinx/")
+                || internalName.startsWith("scala/")
+                || internalName.startsWith("groovy/");
+    }
+
+    /**
+     * Returns true if the type should not have its class or members renamed under any circumstances: JVM bootstrap
+     * types or well-known third-party runtime types.
+     */
+    public static boolean isUnsafeToRename(String internalName) {
+        return isJvmRuntimeType(internalName) || isKnownThirdPartyRuntime(internalName);
     }
 }

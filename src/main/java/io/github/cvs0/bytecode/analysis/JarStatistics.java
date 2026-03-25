@@ -65,7 +65,7 @@ public final class JarStatistics {
         int methods = 0;
         int fields = 0;
         for (ProgramClass clazz : classes) {
-            if (clazz.isEmbeddedLibrary()) {
+            if (!clazz.isApplicationClass()) {
                 embedded++;
             } else {
                 application++;
