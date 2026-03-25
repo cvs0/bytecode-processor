@@ -64,9 +64,8 @@ public class JarReader {
                 }
             }
 
-            // ---- post-load enrichment (replaces JarLibraryClassifier + InheritanceGraph) ----
-            resolveHierarchy(mapping);
-            resolveExternalOverrides(mapping);
+            // ---- post-load enrichment ----
+            resolveHierarchyAndOverrides(mapping);
             classifyApplicationClasses(jar, mapping);
         }
     }
@@ -254,13 +253,12 @@ public class JarReader {
     // ========================================================================
 
     /**
-     * Links every ProgramClass to its parent, children, and resolved interfaces.
-     * External supertypes (not in the mapping) are tracked as unresolved.
+     * Links every ProgramClass to its parent, children, and resolved interfaces,
+     * then marks methods that override external (non-ProgramClass) contracts.
      */
-    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one.
-    static void resolveHierarchy(JarMapping mapping) {
+    static void resolveHierarchyAndOverrides(JarMapping mapping) {
+        // Phase 1: wire parent / child / interface links
         for (ProgramClass pc : mapping.getProgramClasses()) {
-            // Parent class link
             String superName = pc.getSuperName();
             if (superName != null) {
                 ProgramClass parent = mapping.getProgramClass(superName);
@@ -271,7 +269,6 @@ public class JarReader {
                     pc.addUnresolvedSuperType(superName);
                 }
             }
-            // Interface links
             for (String iface : pc.getInterfaces()) {
                 ProgramClass resolved = mapping.getProgramClass(iface);
                 if (resolved != null) {
@@ -282,34 +279,41 @@ public class JarReader {
                 }
             }
         }
-    }
 
-    /**
-     * For each method on each class, walks the hierarchy upward. If any ancestor is an
-     * unresolved external type, tries to load it via reflection. If the external type
-     * declares a method with the same name+descriptor shape, or if it cannot be loaded
-     * at all, the method is conservatively marked as {@code overridesExternal}.
-     */
-    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one.
-    static void resolveExternalOverrides(JarMapping mapping) {
-        // Cache: external type name → set of "name(paramCount)" signatures (or null if unresolvable)
         Map<String, Set<String>> externalMethodCache = new HashMap<>();
 
         for (ProgramClass pc : mapping.getProgramClasses()) {
-            Set<String> externalTypes = collectAllExternalSuperTypes(pc);
+            // Walk upward through already-linked parents to collect all external supertypes
+            Set<String> externalTypes = new LinkedHashSet<>();
+            Deque<ProgramClass> stack = new ArrayDeque<>();
+            Set<ProgramClass> visited = new HashSet<>();
+            stack.push(pc);
+            while (!stack.isEmpty()) {
+                ProgramClass cur = stack.pop();
+                if (cur == null || !visited.add(cur)) {
+                    continue;
+                }
+                externalTypes.addAll(cur.getUnresolvedSuperTypes());
+                if (cur.getParentProgramClass() != null) {
+                    stack.push(cur.getParentProgramClass());
+                }
+                for (ProgramClass iface : cur.getResolvedInterfaces()) {
+                    stack.push(iface);
+                }
+            }
+
             if (externalTypes.isEmpty()) {
                 continue;
             }
 
             boolean anyUnresolvable = false;
             Set<String> externalSignatures = new HashSet<>();
-
             for (String extType : externalTypes) {
-                Set<String> resolved = externalMethodCache.computeIfAbsent(extType, JarReader::resolveExternalMethods);
-                if (resolved == null) {
+                Set<String> sigs = externalMethodCache.computeIfAbsent(extType, JarReader::resolveExternalMethods);
+                if (sigs == null) {
                     anyUnresolvable = true;
                 } else {
-                    externalSignatures.addAll(resolved);
+                    externalSignatures.addAll(sigs);
                 }
             }
 
@@ -331,35 +335,10 @@ public class JarReader {
     }
 
     /**
-     * Walks upward from {@code pc} collecting all unresolved super type names across the
-     * entire hierarchy chain. This includes unresolved parents of resolved parents.
-     */
-    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one.
-    private static Set<String> collectAllExternalSuperTypes(ProgramClass pc) {
-        Set<String> result = new LinkedHashSet<>();
-        Set<ProgramClass> visited = new HashSet<>();
-        collectExternalSuperTypesRecursive(pc, visited, result);
-        return result;
-    }
-
-    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one.
-    private static void collectExternalSuperTypesRecursive(ProgramClass pc, Set<ProgramClass> visited, Set<String> result) {
-        if (pc == null || !visited.add(pc)) {
-            return;
-        }
-        result.addAll(pc.getUnresolvedSuperTypes());
-        collectExternalSuperTypesRecursive(pc.getParentProgramClass(), visited, result);
-        for (ProgramClass iface : pc.getResolvedInterfaces()) {
-            collectExternalSuperTypesRecursive(iface, visited, result);
-        }
-    }
-
-    /**
      * Tries to load an external type via {@code Class.forName()} and extract its non-private,
      * non-static method signatures. Returns {@code null} if the type can't be loaded
      * (signals conservative locking).
      */
-    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one.
     private static Set<String> resolveExternalMethods(String internalName) {
         if ("java/lang/Object".equals(internalName)) {
             return Set.of(); // Object methods are always safe to leave unlocked
@@ -407,11 +386,11 @@ public class JarReader {
      * Classifies application vs embedded-library classes based on the JAR manifest
      * {@code Main-Class} (or {@code Start-Class} for Spring Boot).
      *
-     * <p>If a manifest launch class is found, its package (and all subpackages) are treated as application code.
+     * <p>If a manifest launch class is found, its root package (parent of the main class's package,
+     * covering all sibling packages) is treated as application code.
      * Everything outside that package tree is marked as an embedded library.
      * If no manifest entry exists, <strong>all classes are application classes</strong> (safe default).</p>
      */
-    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one. Project-wide, we should just determine a "project class" by getting the package of the Main-Class from the manifest, then applying x action to ALL classes inside that.
     private static void classifyApplicationClasses(JarFile jar, JarMapping mapping) throws IOException {
         String appRoot = resolveApplicationRoot(jar, mapping);
         if (appRoot == null) {
@@ -427,8 +406,9 @@ public class JarReader {
 
     /**
      * Extracts the application root package from manifest Main-Class / Start-Class,
-     * or from module-info mainClass. Returns the package prefix (internal slash form),
-     * or {@code null} if none found.
+     * or from module-info mainClass. Returns the root package prefix (internal slash form)
+     * by going up one level from the main class's immediate package, so all sibling
+     * packages are included. Returns {@code null} if none found.
      */
     private static String resolveApplicationRoot(JarFile jar, JarMapping mapping) throws IOException {
         // 1. Try manifest
@@ -441,7 +421,7 @@ public class JarReader {
                         main.getValue("Start-Class"));
                 if (mainClass != null && !mainClass.isBlank()) {
                     String internal = mainClass.trim().replace('.', '/');
-                    return packageOf(internal);
+                    return parentPackageOf(internal);
                 }
             }
         }
@@ -451,11 +431,26 @@ public class JarReader {
             if (cn != null && cn.module != null) {
                 ModuleNode mod = cn.module;
                 if (mod.mainClass != null && !mod.mainClass.isBlank()) {
-                    return packageOf(mod.mainClass);
+                    return parentPackageOf(mod.mainClass);
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * Returns the parent of the class's package (i.e. two levels up from the class name).
+     * For {@code a/b/c/d/Foo} this returns {@code a/b/c} so all sibling packages
+     * ({@code a/b/c/d}, {@code a/b/c/e}, etc.) are covered.
+     * Falls back to the immediate package if there is no grandparent.
+     */
+    private static String parentPackageOf(String internalName) {
+        String pkg = packageOf(internalName);
+        if (pkg == null) {
+            return null;
+        }
+        String parent = packageOf(pkg);
+        return parent != null ? parent : pkg;
     }
 
     private static String packageOf(String internalName) {

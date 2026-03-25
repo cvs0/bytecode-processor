@@ -16,7 +16,6 @@ import java.util.Collection;
 public final class JarStatistics {
     private final int applicationClassCount;
     private final int embeddedLibraryClassCount;
-    private final int externalLibraryStubCount;
     private final int resourceCount;
     private final int interfaceCount;
     private final int abstractClassCount;
@@ -28,27 +27,18 @@ public final class JarStatistics {
     private final int packageInfoCount;
 
     /**
-     * All modeled {@code .class} entries ({@link ProgramClass} plus optional {@link io.github.cvs0.bytecode.clazz.LibraryClass} stubs).
+     * All modeled {@code .class} entries ({@link ProgramClass}.
      */
     public int getTotalModeledClassCount() {
-        return applicationClassCount + embeddedLibraryClassCount + externalLibraryStubCount;
+        return applicationClassCount + embeddedLibraryClassCount;
     }
 
-    /**
-     * Same as {@link #getApplicationClassCount()} (legacy name when everything was treated as one bucket).
-     *
-     * @deprecated prefer {@link #getApplicationClassCount()}
-     */
-    @Deprecated
-    public int getProgramClassCount() {
-        return applicationClassCount;
-    }
 
     /**
-     * Embedded {@link ProgramClass} entries plus manual {@link io.github.cvs0.bytecode.clazz.LibraryClass} stubs.
+     * Embedded {@link ProgramClass} entries.
      */
     public int getLibraryClassCount() {
-        return embeddedLibraryClassCount + externalLibraryStubCount;
+        return embeddedLibraryClassCount;
     }
 
     /**
@@ -88,7 +78,6 @@ public final class JarStatistics {
         return new JarStatistics(
                 application,
                 embedded,
-                mapping.getLibraryClasses().size(),
                 mapping.getResourceCount(),
                 interfaces,
                 abstractClasses,

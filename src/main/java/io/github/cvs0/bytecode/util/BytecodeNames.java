@@ -1,5 +1,8 @@
 package io.github.cvs0.bytecode.util;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Single place for JVM internal vs binary naming and related path rules. Used by the CLI, dependency analysis,
  * {@link io.github.cvs0.bytecode.util.JarGraphMetadataReconciler}, and anywhere else internal names appear.
@@ -8,6 +11,13 @@ public final class BytecodeNames {
 
     private BytecodeNames() {
     }
+
+    /**
+     * All package prefixes (dot-delimited) exported or contained in boot-layer modules.
+     * Built once on first access from {@link ModuleLayer#boot()}.
+     */
+    private static volatile Set<String> bootPackages;
+
 
     /** {@code com.foo.Bar} → {@code com/foo/Bar} */
     public static String binaryToInternal(String binaryClassName) {
@@ -51,59 +61,43 @@ public final class BytecodeNames {
     }
 
     /**
-     * Internal names that normally resolve from the JDK / bootstrap loaders. Renaming such a type if it appears as
-     * bytecode in a JAR would desync from what the JVM actually loads, so class rewrites skip them.
+     * Returns {@code true} when the internal name belongs to a package provided by the JVM boot layer
+     * ({@code java.*}, {@code jdk.*}, {@code sun.*}, etc.). These types resolve from the bootstrap/platform
+     * class loaders and must never be renamed.
+     *
+     * <p>Detection uses {@link ModuleLayer#boot()} — every package exported or contained by a boot module
+     * is collected on first call, so the check is accurate for whatever JDK is running.</p>
      */
-    // TODO: Handle this not hardcoded, we need to find a way built into java to just know if its from the jdk / bootstrap loaders
     public static boolean isJvmRuntimeType(String internalName) {
         if (internalName == null || internalName.isEmpty()) {
             return false;
         }
-        return internalName.startsWith("java/")
-                || internalName.startsWith("javax/")
-                || internalName.startsWith("jdk/")
-                || internalName.startsWith("sun/")
-                || internalName.startsWith("com/sun/")
-                || internalName.startsWith("org/w3c/")
-                || internalName.startsWith("org/xml/")
-                || internalName.startsWith("org/ietf/");
-    }
-
-    /**
-     * Returns {@code true} for well-known open-source library prefixes that are commonly shaded into fat JARs. These
-     * types should not have their <em>members</em> renamed because they interact with the JVM or frameworks by stable
-     * names (annotation processors, bytecode libraries, logging facades, etc.).
-     *
-     * <p>This is intentionally a short, conservative list. The {@link JarReader} already protects most
-     * embedded libraries by marking them as non-application classes. This method acts as a secondary safety net when
-     * the reader cannot run or when the caller needs a quick check.</p>
-     */
-    // TODO: Remove this and come up with a smarter way to determine if a package is thirdparty
-    public static boolean isKnownThirdPartyRuntime(String internalName) {
-        if (internalName == null || internalName.isEmpty()) {
+        String binaryPkg = internalNameToPackage(internalName).replace('/', '.');
+        if (binaryPkg.isEmpty()) {
             return false;
         }
-        return internalName.startsWith("org/objectweb/asm/")
-                || internalName.startsWith("org/objectweb/")
-                || internalName.startsWith("picocli/")
-                || internalName.startsWith("org/slf4j/")
-                || internalName.startsWith("org/apache/logging/")
-                || internalName.startsWith("org/apache/commons/")
-                || internalName.startsWith("com/google/gson/")
-                || internalName.startsWith("com/google/common/")
-                || internalName.startsWith("com/fasterxml/jackson/")
-                || internalName.startsWith("org/junit/")
-                || internalName.startsWith("kotlin/")
-                || internalName.startsWith("kotlinx/")
-                || internalName.startsWith("scala/")
-                || internalName.startsWith("groovy/");
+        return getBootPackages().contains(binaryPkg);
+    }
+
+    private static Set<String> getBootPackages() {
+        Set<String> cached = bootPackages;
+        if (cached != null) {
+            return cached;
+        }
+        Set<String> pkgs = ConcurrentHashMap.newKeySet();
+        for (Module m : ModuleLayer.boot().modules()) {
+            pkgs.addAll(m.getPackages());
+        }
+        bootPackages = pkgs;
+        return pkgs;
     }
 
     /**
-     * Returns true if the type should not have its class or members renamed under any circumstances: JVM bootstrap
-     * types or well-known third-party runtime types.
+     * Returns {@code true} if the type belongs to the JVM runtime and must never be renamed.
+     * Third-party library detection is handled at a higher level by
+     * {@link io.github.cvs0.bytecode.clazz.ProgramClass#isApplicationClass()} (set by the {@link JarReader}).
      */
     public static boolean isUnsafeToRename(String internalName) {
-        return isJvmRuntimeType(internalName) || isKnownThirdPartyRuntime(internalName);
+        return isJvmRuntimeType(internalName);
     }
 }

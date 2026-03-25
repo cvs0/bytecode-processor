@@ -19,11 +19,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * In-memory model of a JAR: every {@code .class} entry (as {@link ProgramClass}), {@link ModuleInfoClass module
- * descriptors}, {@link PackageInfoClass package-info}, {@link LibraryClass library} stubs, and all non-class resources.
+ * descriptors}, {@link PackageInfoClass package-info}, and all non-class resources.
  *
  * <p>Program classes are indexed by both JAR entry path and internal name. {@link #getProgramClass(String)} resolves
- * by internal (slash) name in O(1). For multi-release JARs, the base-path class takes precedence; use
- * {@link #getProgramClassVersions(String)} when you need all version-specific entries.</p>
+ * by internal (slash) name in O(1).</p>
  *
  * <p>{@link ProgramClass#isApplicationClass()} distinguishes the host project from shaded dependencies.
  * {@link #getApplicationClasses()} returns only host-project classes; {@link #getProgramClasses()} returns every
@@ -42,12 +41,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public class JarMapping {
     /**
      * Program classes keyed by JAR entry path (e.g. {@code com/foo/Bar.class}), unique per {@code ZipEntry}.
-     * Used for JAR writing and multi-release version tracking.
      */
     private final Map<String, ProgramClass> programClassesByJarEntry = new ConcurrentHashMap<>();
     /**
-     * Primary index: program classes keyed by internal name (e.g. {@code com/foo/Bar}). For single-version JARs,
-     * this is a 1:1 mapping. For multi-release JARs, the base-path entry takes precedence.
+     * Primary index: program classes keyed by internal name (e.g. {@code com/foo/Bar}).
      */
     private final Map<String, ProgramClass> programClassesByName = new ConcurrentHashMap<>();
     private final Map<String, LibraryClass> libraryClasses = new ConcurrentHashMap<>();
@@ -135,11 +132,7 @@ public class JarMapping {
     public void addClass(ProgramClass clazz) {
         Objects.requireNonNull(clazz, "clazz");
         programClassesByJarEntry.put(clazz.getJarEntryName(), clazz);
-        // Base-path entries take precedence over multi-release entries in the name index
-        String name = clazz.getName();
-        if (!clazz.getJarEntryName().startsWith("META-INF/versions/") || !programClassesByName.containsKey(name)) {
-            programClassesByName.put(name, clazz);
-        }
+        programClassesByName.put(clazz.getName(), clazz);
     }
 
     public void addLibraryClass(LibraryClass clazz) {
@@ -199,25 +192,10 @@ public class JarMapping {
 
     /**
      * Returns a bytecode-backed class by internal (slash) name, or {@code null}. Includes embedded libraries and
-     * application classes. For multi-release JARs, returns the base-path entry; use {@link #getProgramClassVersions}
-     * when you need all version-specific entries.
+     * application classes.
      */
     public ProgramClass getProgramClass(String name) {
         return programClassesByName.get(name);
-    }
-
-    /**
-     * Returns all entries for a given internal name (multi-release aware). For single-version JARs, this returns at
-     * most one element.
-     */
-    public List<ProgramClass> getProgramClassVersions(String name) {
-        List<ProgramClass> out = new ArrayList<>();
-        for (ProgramClass c : programClassesByJarEntry.values()) {
-            if (name.equals(c.getName())) {
-                out.add(c);
-            }
-        }
-        return out;
     }
 
     public LibraryClass getLibraryClass(String name) {
@@ -294,21 +272,15 @@ public class JarMapping {
                 toRename.add(pc);
             }
         }
-        ProgramClass baseEntry = null;
         for (ProgramClass programClass : toRename) {
             String oldKey = programClass.getJarEntryName();
             programClassesByJarEntry.remove(oldKey);
             programClass.remapJarEntryPath(oldName, newName);
             programClass.setName(newName);
             programClassesByJarEntry.put(programClass.getJarEntryName(), programClass);
-            if (!programClass.getJarEntryName().startsWith("META-INF/versions/")) {
-                baseEntry = programClass;
-            }
         }
-        // Re-index: prefer the base entry, otherwise the previously indexed one (now renamed)
-        if (baseEntry != null) {
-            programClassesByName.put(newName, baseEntry);
-        } else if (indexed != null) {
+        // Re-index
+        if (indexed != null) {
             programClassesByName.put(newName, indexed);
         } else if (!toRename.isEmpty()) {
             programClassesByName.put(newName, toRename.getFirst());

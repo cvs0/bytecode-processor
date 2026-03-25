@@ -5,7 +5,6 @@ import io.github.cvs0.bytecode.analysis.DependencyAnalyzer;
 import io.github.cvs0.bytecode.analysis.JarStatistics;
 import io.github.cvs0.bytecode.plugin.ConfigurablePlugin;
 import io.github.cvs0.bytecode.plugin.Plugin;
-import io.github.cvs0.bytecode.test.JarAnalyzer;
 import io.github.cvs0.bytecode.util.BytecodeNames;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -97,10 +96,9 @@ public class BytecodeCli implements Runnable {
             JarStatistics s = JarStatistics.from(mapping);
             if (json) {
                 System.out.printf(
-                        "{\"applicationClasses\":%d,\"embeddedLibraryClasses\":%d,\"externalLibraryStubs\":%d,\"totalClasses\":%d,\"libraryClasses\":%d,\"moduleDescriptors\":%d,\"packageInfos\":%d,\"resources\":%d,\"interfaces\":%d,\"abstractClasses\":%d,\"finalClasses\":%d,\"publicClasses\":%d,\"methods\":%d,\"fields\":%d}%n",
+                        "{\"applicationClasses\":%d,\"embeddedLibraryClasses\":%d,\"totalClasses\":%d,\"libraryClasses\":%d,\"moduleDescriptors\":%d,\"packageInfos\":%d,\"resources\":%d,\"interfaces\":%d,\"abstractClasses\":%d,\"finalClasses\":%d,\"publicClasses\":%d,\"methods\":%d,\"fields\":%d}%n",
                         s.getApplicationClassCount(),
                         s.getEmbeddedLibraryClassCount(),
-                        s.getExternalLibraryStubCount(),
                         s.getTotalModeledClassCount(),
                         s.getLibraryClassCount(),
                         s.getModuleDescriptorCount(),
@@ -115,11 +113,7 @@ public class BytecodeCli implements Runnable {
             } else {
                 System.out.println("Application classes: " + s.getApplicationClassCount());
                 System.out.println("Embedded library classes: " + s.getEmbeddedLibraryClassCount());
-                if (s.getExternalLibraryStubCount() > 0) {
-                    System.out.println("External library stubs: " + s.getExternalLibraryStubCount());
-                }
                 System.out.println("Total class models: " + s.getTotalModeledClassCount());
-                System.out.println("Library total (embedded + stubs): " + s.getLibraryClassCount());
                 System.out.println("Module descriptors: " + s.getModuleDescriptorCount());
                 System.out.println("Package infos: " + s.getPackageInfoCount());
                 System.out.println("Resources: " + s.getResourceCount());

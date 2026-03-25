@@ -1,6 +1,8 @@
 package io.github.cvs0.bytecode.transform;
 
+import io.github.cvs0.bytecode.FieldKey;
 import io.github.cvs0.bytecode.JarMapping;
+import io.github.cvs0.bytecode.MethodKey;
 import io.github.cvs0.bytecode.clazz.ModuleInfoClass;
 import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
@@ -61,10 +63,10 @@ public class ClassTransformer implements Transformer {
     private final JarMapping mapping;
     /** Map of old class names to new class names. */
     private final Map<String, String> classNameMappings = new HashMap<>();
-    /** Map of class+field names to new field names. */
-    private final Map<String, String> fieldNameMappings = new HashMap<>();
-    /** Map of class+method+descriptor to new method names. */
-    private final Map<String, String> methodNameMappings = new HashMap<>();
+    /** Typed field rename keys → new field name. */
+    private final Map<FieldKey, String> fieldNameMappings = new HashMap<>();
+    /** Typed method rename keys → new method name. */
+    private final Map<MethodKey, String> methodNameMappings = new HashMap<>();
     /** Runs before renames; use internal names as they exist when {@link #applyTransformations()} starts. */
     private final List<Runnable> structuralTasks = new ArrayList<>();
     /** Runs after reference propagation (e.g. LDC strings, instruction hooks). */
@@ -94,7 +96,7 @@ public class ClassTransformer implements Transformer {
      * @param newFieldName the new field name
      */
     public void renameField(String className, String oldFieldName, String newFieldName) {
-        fieldNameMappings.put(className + "." + oldFieldName, newFieldName);
+        fieldNameMappings.put(FieldKey.of(className, oldFieldName), newFieldName);
     }
     
     /**
@@ -108,7 +110,7 @@ public class ClassTransformer implements Transformer {
         if ("<init>".equals(oldMethodName) || "<clinit>".equals(oldMethodName)) {
             return;
         }
-        methodNameMappings.put(className + "." + oldMethodName + descriptor, newMethodName);
+        methodNameMappings.put(MethodKey.of(className, oldMethodName, descriptor), newMethodName);
     }
 
     /**
@@ -556,30 +558,20 @@ public class ClassTransformer implements Transformer {
         classNameMappings.entrySet().removeIf(e -> BytecodeNames.isUnsafeToRename(e.getKey()));
 
         // Field renames
-        fieldNameMappings.entrySet().removeIf(e -> {
-            String owner = e.getKey().substring(0, e.getKey().lastIndexOf('.'));
-            return BytecodeNames.isUnsafeToRename(owner);
-        });
+        fieldNameMappings.entrySet().removeIf(e -> BytecodeNames.isUnsafeToRename(e.getKey().owner()));
 
         // Method renames — check owner, constructor, native, external override
         methodNameMappings.entrySet().removeIf(e -> {
-            String key = e.getKey();
-            int dot = key.lastIndexOf('.');
-            String owner = key.substring(0, dot);
-            String rest = key.substring(dot + 1);
-            int paren = rest.indexOf('(');
-            String methodName = rest.substring(0, paren);
-            String desc = rest.substring(paren);
-
-            if (BytecodeNames.isUnsafeToRename(owner)) {
+            MethodKey mk = e.getKey();
+            if (BytecodeNames.isUnsafeToRename(mk.owner())) {
                 return true;
             }
-            if ("<init>".equals(methodName) || "<clinit>".equals(methodName)) {
+            if ("<init>".equals(mk.name()) || "<clinit>".equals(mk.name())) {
                 return true;
             }
-            ProgramClass clazz = mapping.getProgramClass(owner);
+            ProgramClass clazz = mapping.getProgramClass(mk.owner());
             if (clazz != null) {
-                ProgramMethod m = clazz.getMethod(methodName, desc);
+                ProgramMethod m = clazz.getMethod(mk.name(), mk.descriptor());
                 if (m != null && !m.isSafeToRename()) {
                     return true;
                 }
@@ -593,30 +585,23 @@ public class ClassTransformer implements Transformer {
      * same rename to every related class that defines the same method — unless that method is unsafe.
      */
     private void propagateMethodRenames() {
-        Map<String, String> propagated = new HashMap<>();
-        for (Map.Entry<String, String> entry : methodNameMappings.entrySet()) {
-            String key = entry.getKey();
+        Map<MethodKey, String> propagated = new HashMap<>();
+        for (Map.Entry<MethodKey, String> entry : methodNameMappings.entrySet()) {
+            MethodKey mk = entry.getKey();
             String newName = entry.getValue();
 
-            int dot = key.lastIndexOf('.');
-            String owner = key.substring(0, dot);
-            String rest = key.substring(dot + 1);
-            int paren = rest.indexOf('(');
-            String methodName = rest.substring(0, paren);
-            String desc = rest.substring(paren);
-
-            ProgramClass clazz = mapping.getProgramClass(owner);
+            ProgramClass clazz = mapping.getProgramClass(mk.owner());
             if (clazz == null) {
                 continue;
             }
             Set<ProgramClass> hierarchy = clazz.getHierarchyClasses();
             for (ProgramClass related : hierarchy) {
-                if (related.getName().equals(owner)) {
+                if (related.getName().equals(mk.owner())) {
                     continue; // already in the map
                 }
-                ProgramMethod m = related.getMethod(methodName, desc);
+                ProgramMethod m = related.getMethod(mk.name(), mk.descriptor());
                 if (m != null && m.isSafeToRename()) {
-                    propagated.put(related.getName() + "." + methodName + desc, newName);
+                    propagated.put(MethodKey.of(related.getName(), mk.name(), mk.descriptor()), newName);
                 }
             }
         }
@@ -713,8 +698,7 @@ public class ClassTransformer implements Transformer {
 
         // Apply field renames for this class
         for (ProgramField f : new ArrayList<>(pc.getFields())) {
-            String key = className + "." + f.getName();
-            String newFieldName = fieldNameMappings.get(key);
+            String newFieldName = fieldNameMappings.get(FieldKey.of(className, f.getName()));
             if (newFieldName != null) {
                 pc.renameField(f.getName(), newFieldName);
             }
@@ -722,8 +706,7 @@ public class ClassTransformer implements Transformer {
 
         // Apply method renames for this class
         for (ProgramMethod m : new ArrayList<>(pc.getMethods())) {
-            String key = className + "." + m.getName() + m.getDescriptor();
-            String newMethodName = methodNameMappings.get(key);
+            String newMethodName = methodNameMappings.get(MethodKey.of(className, m.getName(), m.getDescriptor()));
             if (newMethodName != null) {
                 pc.renameMethod(m.getName(), m.getDescriptor(), newMethodName);
             }
@@ -957,18 +940,40 @@ public class ClassTransformer implements Transformer {
     }
     
     /**
-     * Returns a copy of the field name mappings.
-     * @return a map of class+field to new field names
+     * Returns a copy of the field name mappings (legacy string-keyed form).
+     * @return a map of {@code "owner.fieldName"} to new field names
      */
     public Map<String, String> getFieldNameMappings() {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<FieldKey, String> e : fieldNameMappings.entrySet()) {
+            result.put(e.getKey().toKeyString(), e.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Returns a copy of the field name mappings with typed keys.
+     */
+    public Map<FieldKey, String> getTypedFieldNameMappings() {
         return new HashMap<>(fieldNameMappings);
     }
     
     /**
-     * Returns a copy of the method name mappings.
-     * @return a map of class+method+descriptor to new method names
+     * Returns a copy of the method name mappings (legacy string-keyed form).
+     * @return a map of {@code "owner.methodName(descriptor)"} to new method names
      */
     public Map<String, String> getMethodNameMappings() {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<MethodKey, String> e : methodNameMappings.entrySet()) {
+            result.put(e.getKey().toKeyString(), e.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Returns a copy of the method name mappings with typed keys.
+     */
+    public Map<MethodKey, String> getTypedMethodNameMappings() {
         return new HashMap<>(methodNameMappings);
     }
     
