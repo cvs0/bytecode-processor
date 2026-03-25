@@ -54,7 +54,7 @@ public final class BytecodeNames {
      * Internal names that normally resolve from the JDK / bootstrap loaders. Renaming such a type if it appears as
      * bytecode in a JAR would desync from what the JVM actually loads, so class rewrites skip them.
      */
-    // TODO: Handle this not hardcoded.
+    // TODO: Handle this not hardcoded, we need to find a way built into java to just know if its from the jdk / bootstrap loaders
     public static boolean isJvmRuntimeType(String internalName) {
         if (internalName == null || internalName.isEmpty()) {
             return false;
