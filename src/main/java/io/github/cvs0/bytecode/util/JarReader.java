@@ -7,7 +7,6 @@ import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -258,6 +257,7 @@ public class JarReader {
      * Links every ProgramClass to its parent, children, and resolved interfaces.
      * External supertypes (not in the mapping) are tracked as unresolved.
      */
+    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one.
     static void resolveHierarchy(JarMapping mapping) {
         for (ProgramClass pc : mapping.getProgramClasses()) {
             // Parent class link
@@ -290,6 +290,7 @@ public class JarReader {
      * declares a method with the same name+descriptor shape, or if it cannot be loaded
      * at all, the method is conservatively marked as {@code overridesExternal}.
      */
+    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one.
     static void resolveExternalOverrides(JarMapping mapping) {
         // Cache: external type name → set of "name(paramCount)" signatures (or null if unresolvable)
         Map<String, Set<String>> externalMethodCache = new HashMap<>();
@@ -333,6 +334,7 @@ public class JarReader {
      * Walks upward from {@code pc} collecting all unresolved super type names across the
      * entire hierarchy chain. This includes unresolved parents of resolved parents.
      */
+    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one.
     private static Set<String> collectAllExternalSuperTypes(ProgramClass pc) {
         Set<String> result = new LinkedHashSet<>();
         Set<ProgramClass> visited = new HashSet<>();
@@ -340,6 +342,7 @@ public class JarReader {
         return result;
     }
 
+    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one.
     private static void collectExternalSuperTypesRecursive(ProgramClass pc, Set<ProgramClass> visited, Set<String> result) {
         if (pc == null || !visited.add(pc)) {
             return;
@@ -356,6 +359,7 @@ public class JarReader {
      * non-static method signatures. Returns {@code null} if the type can't be loaded
      * (signals conservative locking).
      */
+    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one.
     private static Set<String> resolveExternalMethods(String internalName) {
         if ("java/lang/Object".equals(internalName)) {
             return Set.of(); // Object methods are always safe to leave unlocked
@@ -407,6 +411,7 @@ public class JarReader {
      * Everything outside that package tree is marked as an embedded library.
      * If no manifest entry exists, <strong>all classes are application classes</strong> (safe default).</p>
      */
+    // TODO: Deprecate this and take on a new system for doing this, a much cleaner one. Project-wide, we should just determine a "project class" by getting the package of the Main-Class from the manifest, then applying x action to ALL classes inside that.
     private static void classifyApplicationClasses(JarFile jar, JarMapping mapping) throws IOException {
         String appRoot = resolveApplicationRoot(jar, mapping);
         if (appRoot == null) {
