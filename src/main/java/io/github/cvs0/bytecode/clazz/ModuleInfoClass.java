@@ -14,7 +14,7 @@ import java.util.Objects;
 @Setter
 public final class ModuleInfoClass {
     private String jarEntryName;
-    private final ClassNode classNode;
+    private ClassNode classNode;
     private int classVersion;
 
     public ModuleInfoClass(String jarEntryName, ClassNode classNode, int classVersion) {

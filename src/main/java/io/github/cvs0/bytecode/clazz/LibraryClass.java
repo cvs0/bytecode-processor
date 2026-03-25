@@ -3,6 +3,8 @@ package io.github.cvs0.bytecode.clazz;
 import io.github.cvs0.bytecode.attribute.Attribute;
 import io.github.cvs0.bytecode.member.LibraryField;
 import io.github.cvs0.bytecode.member.LibraryMethod;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,16 +14,28 @@ import java.util.concurrent.ConcurrentHashMap;
  * Provides methods for querying and modifying class structure and metadata.
  */
 public class LibraryClass {
+    @Getter
+    @Setter
     private String name;
+
+    @Getter
+    @Setter
     private String superName;
+
     private List<String> interfaces;
+
+    @Getter
+    @Setter
     private int access;
+
+    @Getter
+    @Setter
     private String signature;
-    
+
     private final Map<String, LibraryField> fields = new ConcurrentHashMap<>();
     private final Map<String, LibraryMethod> methods = new ConcurrentHashMap<>();
     private final List<Attribute> attributes = new ArrayList<>();
-    
+
     /**
      * Constructs a LibraryClass with the given name.
      * @param name the class name
@@ -102,38 +116,6 @@ public class LibraryClass {
     }
 
     /**
-     * Gets the class name.
-     * @return the class name
-     */
-    public String getName() {
-        return name;
-    }
-
-    /**
-     * Sets the class name.
-     * @param name the new class name
-     */
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    /**
-     * Gets the superclass name.
-     * @return the superclass name
-     */
-    public String getSuperName() {
-        return superName;
-    }
-
-    /**
-     * Sets the superclass name.
-     * @param superName the new superclass name
-     */
-    public void setSuperName(String superName) {
-        this.superName = superName;
-    }
-
-    /**
      * Gets the list of interfaces implemented by this class.
      * @return unmodifiable list of interface names
      */
@@ -165,38 +147,6 @@ public class LibraryClass {
      */
     public void removeInterface(String interfaceName) {
         interfaces.remove(interfaceName);
-    }
-
-    /**
-     * Gets the access flags for this class.
-     * @return the access flags
-     */
-    public int getAccess() {
-        return access;
-    }
-
-    /**
-     * Sets the access flags for this class.
-     * @param access the new access flags
-     */
-    public void setAccess(int access) {
-        this.access = access;
-    }
-
-    /**
-     * Gets the generic signature for this class.
-     * @return the signature
-     */
-    public String getSignature() {
-        return signature;
-    }
-
-    /**
-     * Sets the generic signature for this class.
-     * @param signature the new signature
-     */
-    public void setSignature(String signature) {
-        this.signature = signature;
     }
 
     /**
