@@ -1,16 +1,20 @@
 package io.github.cvs0.bytecode.clazz;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.objectweb.asm.tree.ClassNode;
 
 import java.util.Objects;
 
 /**
- * A {@code module-info.class} entry from a JAR (possibly under a multi-release path).
+ * A {@code module-info.class} entry from a JAR.
  * Kept separate from {@link ProgramClass} because the file is a module descriptor, not a normal type.
  */
+@Getter
+@Setter
 public final class ModuleInfoClass {
     private String jarEntryName;
-    private final ClassNode classNode;
+    private ClassNode classNode;
     private int classVersion;
 
     public ModuleInfoClass(String jarEntryName, ClassNode classNode, int classVersion) {
@@ -19,28 +23,8 @@ public final class ModuleInfoClass {
         this.classVersion = classVersion;
     }
 
-    public String getJarEntryName() {
-        return jarEntryName;
-    }
-
-    public void setJarEntryName(String jarEntryName) {
-        this.jarEntryName = Objects.requireNonNull(jarEntryName, "jarEntryName");
-    }
-
-    public ClassNode getClassNode() {
-        return classNode;
-    }
-
     /** Internal name of the class file ({@code module-info}). */
     public String getInternalName() {
         return classNode.name != null ? classNode.name : "module-info";
-    }
-
-    public int getClassVersion() {
-        return classVersion;
-    }
-
-    public void setClassVersion(int classVersion) {
-        this.classVersion = classVersion;
     }
 }

@@ -1,8 +1,11 @@
 package io.github.cvs0.bytecode.cli;
 
+import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.analysis.DependencyAnalyzer;
 import io.github.cvs0.bytecode.analysis.JarStatistics;
-import io.github.cvs0.bytecode.test.JarAnalyzer;
+import io.github.cvs0.bytecode.plugin.ConfigurablePlugin;
+import io.github.cvs0.bytecode.plugin.Plugin;
+import io.github.cvs0.bytecode.util.BytecodeNames;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -11,6 +14,9 @@ import picocli.CommandLine.Spec;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -22,11 +28,12 @@ import java.util.concurrent.Callable;
         name = "bytecode-processor",
         mixinStandardHelpOptions = true,
         versionProvider = BytecodeCli.CliVersionProvider.class,
-        description = "Analyze Java JAR files (dependencies, statistics, Graphviz export).",
+        description = "Analyze and transform Java JAR files (dependencies, statistics, plugins, Graphviz export).",
         subcommands = {
                 BytecodeCli.AnalyzeCommand.class,
                 BytecodeCli.StatsCommand.class,
-                BytecodeCli.DepsCommand.class
+                BytecodeCli.DepsCommand.class,
+                BytecodeCli.TransformCommand.class
         })
 public class BytecodeCli implements Runnable {
 
@@ -89,8 +96,10 @@ public class BytecodeCli implements Runnable {
             JarStatistics s = JarStatistics.from(mapping);
             if (json) {
                 System.out.printf(
-                        "{\"programClasses\":%d,\"libraryClasses\":%d,\"moduleDescriptors\":%d,\"packageInfos\":%d,\"resources\":%d,\"interfaces\":%d,\"abstractClasses\":%d,\"finalClasses\":%d,\"publicClasses\":%d,\"methods\":%d,\"fields\":%d}%n",
-                        s.getProgramClassCount(),
+                        "{\"applicationClasses\":%d,\"embeddedLibraryClasses\":%d,\"totalClasses\":%d,\"libraryClasses\":%d,\"moduleDescriptors\":%d,\"packageInfos\":%d,\"resources\":%d,\"interfaces\":%d,\"abstractClasses\":%d,\"finalClasses\":%d,\"publicClasses\":%d,\"methods\":%d,\"fields\":%d}%n",
+                        s.getApplicationClassCount(),
+                        s.getEmbeddedLibraryClassCount(),
+                        s.getTotalModeledClassCount(),
                         s.getLibraryClassCount(),
                         s.getModuleDescriptorCount(),
                         s.getPackageInfoCount(),
@@ -102,8 +111,9 @@ public class BytecodeCli implements Runnable {
                         s.getTotalMethods(),
                         s.getTotalFields());
             } else {
-                System.out.println("Program classes: " + s.getProgramClassCount());
-                System.out.println("Library classes: " + s.getLibraryClassCount());
+                System.out.println("Application classes: " + s.getApplicationClassCount());
+                System.out.println("Embedded library classes: " + s.getEmbeddedLibraryClassCount());
+                System.out.println("Total class models: " + s.getTotalModeledClassCount());
                 System.out.println("Module descriptors: " + s.getModuleDescriptorCount());
                 System.out.println("Package infos: " + s.getPackageInfoCount());
                 System.out.println("Resources: " + s.getResourceCount());
@@ -126,7 +136,10 @@ public class BytecodeCli implements Runnable {
         @Option(names = "--dot", description = "Write forward dependency graph as Graphviz DOT")
         Path dotOut;
 
-        @Option(names = "--class", description = "List program classes that depend on this internal name (e.g. com/foo/Bar)")
+        @Option(
+                names = "--class",
+                description =
+                        "List program classes that depend on this type (internal form e.g. com/foo/Bar, or binary name com.foo.Bar)")
         String className;
 
         @Override
@@ -137,12 +150,13 @@ public class BytecodeCli implements Runnable {
             }
             var mapping = io.github.cvs0.bytecode.JarMapping.fromJar(jar);
             Map<String, Set<String>> graph = DependencyAnalyzer.buildDependencyGraph(mapping);
-            System.out.println("Dependency nodes (program classes): " + graph.size());
+            System.out.println("Dependency nodes (classes in JAR): " + graph.size());
             Set<String> cycles = DependencyAnalyzer.findCircularDependencies(mapping);
             System.out.println("Classes involved in cycles: " + cycles.size());
             if (className != null && !className.isBlank()) {
-                Set<String> dependents = DependencyAnalyzer.findDependents(mapping, className);
-                System.out.println("Dependents of " + className + ": " + dependents.size());
+                String internalQuery = normalizeInternalNameForDependencyQuery(className);
+                Set<String> dependents = DependencyAnalyzer.findDependents(mapping, internalQuery);
+                System.out.println("Dependents of " + internalQuery + ": " + dependents.size());
                 dependents.stream().sorted().limit(50).forEach(d -> System.out.println("  " + d));
                 if (dependents.size() > 50) {
                     System.out.println("  ... (" + (dependents.size() - 50) + " more)");
@@ -154,6 +168,118 @@ public class BytecodeCli implements Runnable {
                 System.out.println("Wrote DOT to " + dotOut.toAbsolutePath());
             }
             return 0;
+        }
+    }
+
+    /**
+     * Dependency graphs use slash-separated internal names; accept dotted binary names from the CLI as well.
+     *
+     * @see BytecodeNames#binaryToInternal(String)
+     */
+    static String normalizeInternalNameForDependencyQuery(String raw) {
+        String s = raw.trim();
+        if (s.contains("/")) {
+            return s;
+        }
+        return BytecodeNames.binaryToInternal(s);
+    }
+
+    @Command(
+            name = "transform",
+            description = "Load a JAR, run one or more plugins in order, and write a new JAR from the full in-memory model.")
+    static class TransformCommand implements Callable<Integer> {
+        @Option(
+                names = {"-i", "--input"},
+                required = true,
+                description = "Input JAR path")
+        Path input;
+
+        @Option(
+                names = {"-o", "--output"},
+                required = true,
+                description = "Output JAR path (must differ from input)")
+        Path output;
+
+        @Option(
+                names = {"-p", "--plugin"},
+                required = true,
+                description =
+                        "Plugin id (repeatable, order preserved): obfuscation, obfuscate, optimization, optimize")
+        List<String> plugins = new ArrayList<>();
+
+        @Option(
+                names = "--plugin-opt",
+                description = "Plugin configuration key=value (repeatable; applied to each plugin that supports it)")
+        List<String> pluginOpts = new ArrayList<>();
+
+        @Override
+        public Integer call() throws Exception {
+            if (!Files.isRegularFile(input)) {
+                System.err.println("Input JAR not found: " + input);
+                return 2;
+            }
+            if (input.normalize().equals(output.normalize())) {
+                System.err.println("Output path must differ from input.");
+                return 2;
+            }
+
+            JarMapping mapping = JarMapping.fromJar(input);
+
+            Map<String, Object> config = parsePluginOpts(pluginOpts);
+            for (String pluginId : plugins) {
+                Plugin plugin = CliPluginRegistry.create(pluginId);
+                if (plugin instanceof ConfigurablePlugin cp && !config.isEmpty()) {
+                    cp.configure(config);
+                }
+                plugin.initialize();
+                try {
+                    plugin.process(mapping);
+                } finally {
+                    plugin.cleanup();
+                }
+            }
+
+            Path parent = output.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            mapping.writeToJar(output);
+            System.out.println("Wrote: " + output.toAbsolutePath().normalize());
+            return 0;
+        }
+
+        static Map<String, Object> parsePluginOpts(List<String> pluginOpts) {
+            Map<String, Object> m = new HashMap<>();
+            for (String raw : pluginOpts) {
+                if (raw == null || raw.isBlank()) {
+                    continue;
+                }
+                int eq = raw.indexOf('=');
+                if (eq <= 0 || eq == raw.length() - 1) {
+                    throw new IllegalArgumentException("Expected key=value, got: " + raw);
+                }
+                String key = raw.substring(0, eq).trim();
+                String value = raw.substring(eq + 1).trim();
+                m.put(key, parseConfigScalar(value));
+            }
+            return m;
+        }
+
+        static Object parseConfigScalar(String value) {
+            if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
+                return Boolean.parseBoolean(value);
+            }
+            try {
+                return Integer.parseInt(value);
+            } catch (NumberFormatException ignored) {
+                // fall through
+            }
+            try {
+                return Long.parseLong(value);
+            } catch (NumberFormatException ignored) {
+                // fall through
+            }
+            return value;
         }
     }
 }

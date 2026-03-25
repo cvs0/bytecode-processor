@@ -3,6 +3,8 @@ package io.github.cvs0.bytecode.member;
 import io.github.cvs0.bytecode.attribute.*;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.instruction.Instruction;
+import lombok.Getter;
+import lombok.Setter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.InsnList;
@@ -15,20 +17,61 @@ import java.util.*;
  * Provides methods for manipulating method structure, bytecode, and metadata, as well as ASM MethodNode integration.
  */
 public class ProgramMethod {
+    @Getter
     private String name;
+    
+    @Getter
     private String descriptor;
+
+    @Getter
     private String signature;
+
+    @Getter
     private int access;
     private String[] exceptions;
+
+    @Getter
     private int maxStack;
+
+    @Getter
     private int maxLocals;
 
+    @Getter
+    @Setter
     private ProgramClass owner;
+
     private final List<Attribute> attributes = new ArrayList<>();
+
     private final List<Instruction> instructions = new ArrayList<>();
+
     private final List<LocalVariable> localVariables = new ArrayList<>();
+
     private final List<LineNumber> lineNumbers = new ArrayList<>();
+
+    @Getter
+    @Setter
     private MethodNode methodNode;
+
+    /**
+     * {@code true} when this method overrides or implements a contract from an external type
+     * (not present as a ProgramClass in the JAR). Set by the JarReader at read time.
+     * Such methods must not be renamed or the JVM will fail to resolve the override at runtime.
+     */
+    @Getter
+    @Setter
+    private boolean overridesExternal;
+
+    /**
+     * Whether this method can be safely renamed without breaking JVM contracts.
+     * A method is safe to rename if it is not a constructor, static initializer, native method,
+     * or an external contract override.
+     */
+    public boolean isSafeToRename() {
+        return !isConstructor()
+                && !isStaticInitializer()
+                && !isNative()
+                && !overridesExternal;
+    }
 
     /**
      * Constructs a ProgramMethod with the given name, descriptor, and access flags.
@@ -222,14 +265,6 @@ public class ProgramMethod {
     }
 
     /**
-     * Gets the method name.
-     * @return the method name
-     */
-    public String getName() {
-        return name;
-    }
-
-    /**
      * Sets the method name.
      * @param name the new method name
      */
@@ -238,14 +273,6 @@ public class ProgramMethod {
         if (methodNode != null) {
             methodNode.name = name;
         }
-    }
-
-    /**
-     * Gets the method descriptor.
-     * @return the method descriptor
-     */
-    public String getDescriptor() {
-        return descriptor;
     }
 
     /**
@@ -260,14 +287,6 @@ public class ProgramMethod {
     }
 
     /**
-     * Gets the generic signature for this method.
-     * @return the signature
-     */
-    public String getSignature() {
-        return signature;
-    }
-
-    /**
      * Sets the generic signature for this method.
      * @param signature the new signature
      */
@@ -276,14 +295,6 @@ public class ProgramMethod {
         if (methodNode != null) {
             methodNode.signature = signature;
         }
-    }
-
-    /**
-     * Gets the access flags for this method.
-     * @return the access flags
-     */
-    public int getAccess() {
-        return access;
     }
 
     /**
@@ -321,14 +332,6 @@ public class ProgramMethod {
     }
 
     /**
-     * Gets the maximum stack size for this method.
-     * @return the max stack size
-     */
-    public int getMaxStack() {
-        return maxStack;
-    }
-
-    /**
      * Sets the maximum stack size for this method.
      * @param maxStack the new max stack size
      */
@@ -340,14 +343,6 @@ public class ProgramMethod {
     }
 
     /**
-     * Gets the maximum number of local variables for this method.
-     * @return the max locals
-     */
-    public int getMaxLocals() {
-        return maxLocals;
-    }
-
-    /**
      * Sets the maximum number of local variables for this method.
      * @param maxLocals the new max locals
      */
@@ -356,38 +351,6 @@ public class ProgramMethod {
         if (methodNode != null) {
             methodNode.maxLocals = maxLocals;
         }
-    }
-
-    /**
-     * Gets the owning ProgramClass for this method.
-     * @return the owner class
-     */
-    public ProgramClass getOwner() {
-        return owner;
-    }
-
-    /**
-     * Sets the owning ProgramClass for this method.
-     * @param owner the new owner class
-     */
-    public void setOwner(ProgramClass owner) {
-        this.owner = owner;
-    }
-
-    /**
-     * Gets the underlying ASM MethodNode for this method.
-     * @return the MethodNode
-     */
-    public MethodNode getMethodNode() {
-        return methodNode;
-    }
-
-    /**
-     * Sets the underlying ASM MethodNode for this method.
-     * @param methodNode the new MethodNode
-     */
-    public void setMethodNode(MethodNode methodNode) {
-        this.methodNode = methodNode;
     }
 
     /**

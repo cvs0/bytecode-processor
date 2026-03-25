@@ -10,6 +10,8 @@ import java.util.jar.Manifest;
 
 /**
  * Rewrites {@code META-INF/MANIFEST.MF} entries when launch-related classes were renamed (e.g. after obfuscation).
+ *
+ * @see io.github.cvs0.bytecode.JarMapping#remapManifestMainClass(java.util.Map)
  */
 public final class ManifestPatcher {
 

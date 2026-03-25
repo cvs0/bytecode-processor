@@ -1,25 +1,30 @@
 package io.github.cvs0.bytecode.transform;
 
+import io.github.cvs0.bytecode.FieldKey;
 import io.github.cvs0.bytecode.JarMapping;
+import io.github.cvs0.bytecode.MethodKey;
 import io.github.cvs0.bytecode.clazz.ModuleInfoClass;
 import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
+import io.github.cvs0.bytecode.util.BytecodeNames;
 import io.github.cvs0.bytecode.util.BytecodeTraversal;
-import org.objectweb.asm.Handle;
-import org.objectweb.asm.Type;
+import io.github.cvs0.bytecode.util.JarGraphMetadataReconciler;
+import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
-import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.LineNumberNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.ModuleExportNode;
 import org.objectweb.asm.tree.ModuleNode;
 import org.objectweb.asm.tree.ModuleOpenNode;
+import org.objectweb.asm.tree.ModuleProvideNode;
 import org.objectweb.asm.tree.MultiANewArrayInsnNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
@@ -29,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
@@ -37,28 +43,30 @@ import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /**
- * Performs transformations on classes, methods, fields, resources, and method bodies within a {@link JarMapping}.
+ * {@link Transformer} that performs class/field/method renames and structural edits on a {@link JarMapping}.
  *
- * <p><b>Apply order</b> when you call {@link #applyTransformations()}:
+ * <p><b>Apply order</b> ({@link #applyTransformations()}):</p>
  * <ol>
- *   <li>Structural tasks (access, superclass, interfaces, versions, signatures, member removal, debug stripping, {@link #visitProgramClasses})</li>
- *   <li>Scheduled field renames, then method renames, then class renames</li>
- *   <li>Reference propagation (owners, descriptors, signatures, invokedynamic, etc.)</li>
- *   <li>Post tasks ({@link #transformStringConstants}, {@link #transformLdcConstants}, {@link #transformInstructions}, resources, {@link #visitMethodsAfterReferences}, …)</li>
+ *   <li>Structural tasks (access, superclass, interfaces, debug stripping, visitors)</li>
+ *   <li>Validate renames (drop unsafe renames for constructors, native, external overrides)</li>
+ *   <li>Propagate method renames across the hierarchy (using {@link ProgramClass#getHierarchyClasses()})</li>
+ *   <li>Remap every ClassNode via ASM {@link ClassRemapper} + {@link MappingRemapper}</li>
+ *   <li>Sync ProgramClass wrappers, update JarMapping indexes</li>
+ *   <li>Post-reference tasks (string/LDC transforms, instruction hooks, resources)</li>
+ *   <li>{@link JarGraphMetadataReconciler#reconcile(JarMapping)}</li>
  * </ol>
  *
- * <p>APIs such as {@link #renamePackage}, {@link #renameClassesMatching}, and {@link #renameClass} enqueue renames; use internal names
- * (e.g. {@code com/foo/Bar}) consistent with the mapping at the time you call {@code applyTransformations()}.
+ * <p>Use internal names (e.g. {@code com/foo/Bar}) when scheduling renames.</p>
  */
-public class ClassTransformer {
+public class ClassTransformer implements Transformer {
     /** The JarMapping to operate on. */
     private final JarMapping mapping;
     /** Map of old class names to new class names. */
     private final Map<String, String> classNameMappings = new HashMap<>();
-    /** Map of class+field names to new field names. */
-    private final Map<String, String> fieldNameMappings = new HashMap<>();
-    /** Map of class+method+descriptor to new method names. */
-    private final Map<String, String> methodNameMappings = new HashMap<>();
+    /** Typed field rename keys → new field name. */
+    private final Map<FieldKey, String> fieldNameMappings = new HashMap<>();
+    /** Typed method rename keys → new method name. */
+    private final Map<MethodKey, String> methodNameMappings = new HashMap<>();
     /** Runs before renames; use internal names as they exist when {@link #applyTransformations()} starts. */
     private final List<Runnable> structuralTasks = new ArrayList<>();
     /** Runs after reference propagation (e.g. LDC strings, instruction hooks). */
@@ -88,7 +96,7 @@ public class ClassTransformer {
      * @param newFieldName the new field name
      */
     public void renameField(String className, String oldFieldName, String newFieldName) {
-        fieldNameMappings.put(className + "." + oldFieldName, newFieldName);
+        fieldNameMappings.put(FieldKey.of(className, oldFieldName), newFieldName);
     }
     
     /**
@@ -99,7 +107,10 @@ public class ClassTransformer {
      * @param newMethodName the new method name
      */
     public void renameMethod(String className, String oldMethodName, String descriptor, String newMethodName) {
-        methodNameMappings.put(className + "." + oldMethodName + descriptor, newMethodName);
+        if ("<init>".equals(oldMethodName) || "<clinit>".equals(oldMethodName)) {
+            return;
+        }
+        methodNameMappings.put(MethodKey.of(className, oldMethodName, descriptor), newMethodName);
     }
 
     /**
@@ -503,14 +514,318 @@ public class ClassTransformer {
 
     /**
      * Applies all scheduled transformations (renames and reference updates).
+     *
+     * <p><b>Phases:</b></p>
+     * <ol>
+     *   <li>Run structural tasks</li>
+     *   <li>Validate renames — drop unsafe class/field/method renames</li>
+     *   <li>Propagate method renames across the class hierarchy</li>
+     *   <li>Build {@link MappingRemapper} and remap every ClassNode via ASM {@link ClassRemapper}</li>
+     *   <li>Sync ProgramClass wrappers and update JarMapping indexes</li>
+     *   <li>Run post-reference tasks, reconcile metadata</li>
+     * </ol>
      */
     public void applyTransformations() {
         runStructuralTasks();
-        applyFieldRenames();
-        applyMethodRenames();
-        applyClassRenames();
-        updateReferences();
+
+        validateRenames();
+        propagateMethodRenames();
+
+        if (!classNameMappings.isEmpty() || !fieldNameMappings.isEmpty() || !methodNameMappings.isEmpty()) {
+            MappingRemapper remapper = new MappingRemapper(classNameMappings, fieldNameMappings, methodNameMappings);
+            remapAllClassNodes(remapper);
+        }
+
         runPostReferenceTasks();
+        JarGraphMetadataReconciler.reconcile(mapping);
+    }
+
+    @Override
+    public void transform(JarMapping mapping) {
+        applyTransformations();
+    }
+
+    /**
+     * Drops renames that would break JVM contracts:
+     * <ul>
+     *   <li>Class renames for JVM runtime or known third-party types</li>
+     *   <li>Field renames on JVM/third-party types</li>
+     *   <li>Method renames on JVM/third-party types, constructors, or methods overriding external contracts</li>
+     * </ul>
+     */
+    private void validateRenames() {
+        // Class renames
+        classNameMappings.entrySet().removeIf(e -> BytecodeNames.isUnsafeToRename(e.getKey()));
+
+        // Field renames
+        fieldNameMappings.entrySet().removeIf(e -> BytecodeNames.isUnsafeToRename(e.getKey().owner()));
+
+        // Method renames — check owner, constructor, native, external override
+        methodNameMappings.entrySet().removeIf(e -> {
+            MethodKey mk = e.getKey();
+            if (BytecodeNames.isUnsafeToRename(mk.owner())) {
+                return true;
+            }
+            if ("<init>".equals(mk.name()) || "<clinit>".equals(mk.name())) {
+                return true;
+            }
+            ProgramClass clazz = mapping.getProgramClass(mk.owner());
+            if (clazz != null) {
+                ProgramMethod m = clazz.getMethod(mk.name(), mk.descriptor());
+                if (m != null && !m.isSafeToRename()) {
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+
+    /**
+     * For each scheduled method rename, walks the hierarchy (up and down) and applies the
+     * same rename to every related class that defines the same method — unless that method is unsafe.
+     */
+    private void propagateMethodRenames() {
+        Map<MethodKey, String> propagated = new HashMap<>();
+        for (Map.Entry<MethodKey, String> entry : methodNameMappings.entrySet()) {
+            MethodKey mk = entry.getKey();
+            String newName = entry.getValue();
+
+            ProgramClass clazz = mapping.getProgramClass(mk.owner());
+            if (clazz == null) {
+                continue;
+            }
+            Set<ProgramClass> hierarchy = clazz.getHierarchyClasses();
+            for (ProgramClass related : hierarchy) {
+                if (related.getName().equals(mk.owner())) {
+                    continue; // already in the map
+                }
+                ProgramMethod m = related.getMethod(mk.name(), mk.descriptor());
+                if (m != null && m.isSafeToRename()) {
+                    propagated.put(MethodKey.of(related.getName(), mk.name(), mk.descriptor()), newName);
+                }
+            }
+        }
+        methodNameMappings.putAll(propagated);
+    }
+
+    /**
+     * Remaps every ClassNode via ASM's {@link ClassRemapper}, then updates JarMapping indexes,
+     * then syncs all ProgramClass wrappers from the remapped ClassNodes.
+     *
+     * <p>For ProgramClasses without a ClassNode (e.g. test-constructed), a manual fallback
+     * applies class/field/method renames and updates instruction references.</p>
+     */
+    private void remapAllClassNodes(MappingRemapper remapper) {
+        org.objectweb.asm.commons.Remapper asmRemapper = remapper.toAsm();
+
+        // Phase 1: Remap ClassNodes (or apply manual fallback for null-ClassNode classes)
+        Map<String, String> nameChanges = new HashMap<>();
+        List<ProgramClass> noClassNodePCs = new ArrayList<>();
+
+        for (ProgramClass pc : new ArrayList<>(mapping.getProgramClasses())) {
+            ClassNode original = pc.getClassNode();
+            if (original == null) {
+                noClassNodePCs.add(pc);
+                continue;
+            }
+            String oldName = pc.getName();
+            ClassNode remapped = new ClassNode();
+            ClassRemapper cr = new ClassRemapper(remapped, asmRemapper);
+            original.accept(cr);
+            pc.setClassNode(remapped);
+
+            String newName = remapped.name;
+            if (newName != null && !oldName.equals(newName)) {
+                nameChanges.put(oldName, newName);
+            }
+        }
+
+        // Phase 1b: Manual fallback for ProgramClasses without a ClassNode
+        for (ProgramClass pc : noClassNodePCs) {
+            String oldName = pc.getName();
+            applyManualRenames(pc, remapper, asmRemapper);
+            String newName = classNameMappings.get(oldName);
+            if (newName != null) {
+                nameChanges.put(oldName, newName);
+            }
+        }
+
+        // Phase 2: Update JarMapping indexes (includes package-infos, library classes, etc.)
+        // First, add any classNameMappings entries not already covered (e.g. package-info renames)
+        for (Map.Entry<String, String> entry : classNameMappings.entrySet()) {
+            if (!nameChanges.containsKey(entry.getKey())) {
+                nameChanges.put(entry.getKey(), entry.getValue());
+            }
+        }
+        for (Map.Entry<String, String> entry : nameChanges.entrySet()) {
+            mapping.renameClass(entry.getKey(), entry.getValue());
+        }
+
+        // Phase 3: Sync ProgramClass wrappers from remapped ClassNodes
+        for (ProgramClass pc : mapping.getProgramClasses()) {
+            pc.syncFromClassNode();
+        }
+
+        // Phase 4: Remap module descriptors in-place
+        remapModuleDescriptors(asmRemapper);
+    }
+
+    /**
+     * Manual rename fallback for ProgramClasses that have no ClassNode.
+     * Applies field/method renames and updates instruction references.
+     */
+    private void applyManualRenames(ProgramClass pc, MappingRemapper remapper,
+                                     org.objectweb.asm.commons.Remapper asmRemapper) {
+        String className = pc.getName();
+
+        // Remap superName and interfaces
+        if (pc.getSuperName() != null) {
+            String mappedSuper = classNameMappings.get(pc.getSuperName());
+            if (mappedSuper != null) {
+                pc.setSuperName(mappedSuper);
+            }
+        }
+        if (pc.getInterfaces() != null) {
+            List<String> ifaces = new ArrayList<>(pc.getInterfaces());
+            for (int i = 0; i < ifaces.size(); i++) {
+                String mapped = classNameMappings.get(ifaces.get(i));
+                if (mapped != null) {
+                    ifaces.set(i, mapped);
+                }
+            }
+            pc.setInterfaces(ifaces);
+        }
+
+        // Apply field renames for this class
+        for (ProgramField f : new ArrayList<>(pc.getFields())) {
+            String newFieldName = fieldNameMappings.get(FieldKey.of(className, f.getName()));
+            if (newFieldName != null) {
+                pc.renameField(f.getName(), newFieldName);
+            }
+        }
+
+        // Apply method renames for this class
+        for (ProgramMethod m : new ArrayList<>(pc.getMethods())) {
+            String newMethodName = methodNameMappings.get(MethodKey.of(className, m.getName(), m.getDescriptor()));
+            if (newMethodName != null) {
+                pc.renameMethod(m.getName(), m.getDescriptor(), newMethodName);
+            }
+        }
+
+        // Update instruction references in any MethodNodes
+        for (ProgramMethod pm : pc.getMethods()) {
+            MethodNode mn = pm.getMethodNode();
+            if (mn == null || mn.instructions == null) {
+                continue;
+            }
+            remapInstructions(mn, asmRemapper);
+            // Remap method descriptor
+            mn.desc = asmRemapper.mapMethodDesc(mn.desc);
+        }
+    }
+
+    /**
+     * Walks instruction nodes and updates class/field/method references using the ASM remapper.
+     */
+    private static void remapInstructions(MethodNode mn, org.objectweb.asm.commons.Remapper asmRemapper) {
+        for (AbstractInsnNode insn = mn.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn instanceof FieldInsnNode fin) {
+                fin.owner = asmRemapper.mapType(fin.owner);
+                fin.desc = asmRemapper.mapDesc(fin.desc);
+                fin.name = asmRemapper.mapFieldName(fin.owner, fin.name, fin.desc);
+            } else if (insn instanceof MethodInsnNode min) {
+                String origOwner = min.owner;
+                min.owner = asmRemapper.mapType(min.owner);
+                min.name = asmRemapper.mapMethodName(origOwner, min.name, min.desc);
+                min.desc = asmRemapper.mapMethodDesc(min.desc);
+            } else if (insn instanceof TypeInsnNode tin) {
+                tin.desc = asmRemapper.mapType(tin.desc);
+            } else if (insn instanceof MultiANewArrayInsnNode man) {
+                man.desc = asmRemapper.mapDesc(man.desc);
+            } else if (insn instanceof InvokeDynamicInsnNode idin) {
+                idin.desc = asmRemapper.mapMethodDesc(idin.desc);
+            } else if (insn instanceof LdcInsnNode ldc && ldc.cst instanceof org.objectweb.asm.Type t) {
+                ldc.cst = org.objectweb.asm.Type.getType(asmRemapper.mapDesc(t.getDescriptor()));
+            } else if (insn instanceof FrameNode frame) {
+                remapFrameTypes(frame.local, asmRemapper);
+                remapFrameTypes(frame.stack, asmRemapper);
+            }
+        }
+        // Remap try-catch handler types
+        if (mn.tryCatchBlocks != null) {
+            for (var tcb : mn.tryCatchBlocks) {
+                if (tcb.type != null) {
+                    tcb.type = asmRemapper.mapType(tcb.type);
+                }
+            }
+        }
+        // Remap local variable types
+        if (mn.localVariables != null) {
+            for (var lv : mn.localVariables) {
+                lv.desc = asmRemapper.mapDesc(lv.desc);
+                if (lv.signature != null) {
+                    lv.signature = asmRemapper.mapSignature(lv.signature, true);
+                }
+            }
+        }
+    }
+
+    private static void remapFrameTypes(List<Object> types, org.objectweb.asm.commons.Remapper asmRemapper) {
+        if (types == null) {
+            return;
+        }
+        for (int i = 0; i < types.size(); i++) {
+            Object o = types.get(i);
+            if (o instanceof String s) {
+                types.set(i, asmRemapper.mapType(s));
+            }
+        }
+    }
+
+    /**
+     * Remaps module descriptors (mainClass, uses, provides, exports, opens, packages) in-place.
+     */
+    private void remapModuleDescriptors(org.objectweb.asm.commons.Remapper asmRemapper) {
+        for (ModuleInfoClass mic : mapping.getModuleInfos()) {
+            ClassNode cn = mic.getClassNode();
+            if (cn == null || cn.module == null) {
+                continue;
+            }
+            ModuleNode mod = cn.module;
+            if (mod.mainClass != null) {
+                mod.mainClass = asmRemapper.mapType(mod.mainClass);
+            }
+            if (mod.uses != null) {
+                for (int i = 0; i < mod.uses.size(); i++) {
+                    mod.uses.set(i, asmRemapper.mapType(mod.uses.get(i)));
+                }
+            }
+            if (mod.provides != null) {
+                for (ModuleProvideNode pn : mod.provides) {
+                    pn.service = asmRemapper.mapType(pn.service);
+                    if (pn.providers != null) {
+                        for (int i = 0; i < pn.providers.size(); i++) {
+                            pn.providers.set(i, asmRemapper.mapType(pn.providers.get(i)));
+                        }
+                    }
+                }
+            }
+            if (mod.exports != null) {
+                for (ModuleExportNode e : mod.exports) {
+                    e.packaze = asmRemapper.mapType(e.packaze);
+                }
+            }
+            if (mod.opens != null) {
+                for (ModuleOpenNode o : mod.opens) {
+                    o.packaze = asmRemapper.mapType(o.packaze);
+                }
+            }
+            if (mod.packages != null) {
+                for (int i = 0; i < mod.packages.size(); i++) {
+                    mod.packages.set(i, asmRemapper.mapType(mod.packages.get(i)));
+                }
+            }
+        }
     }
 
     private void runStructuralTasks() {
@@ -569,256 +884,6 @@ public class ClassTransformer {
             }
         }
     }
-    
-    /**
-     * Applies class renames to the mapping.
-     */
-    private void applyClassRenames() {
-        for (Map.Entry<String, String> entry : classNameMappings.entrySet()) {
-            String oldName = entry.getKey();
-            String newName = entry.getValue();
-            mapping.renameClass(oldName, newName);
-        }
-    }
-    
-    /**
-     * Applies field renames to the mapping.
-     */
-    private void applyFieldRenames() {
-        for (Map.Entry<String, String> entry : fieldNameMappings.entrySet()) {
-            String key = entry.getKey();
-            String newName = entry.getValue();
-            
-            int lastDot = key.lastIndexOf('.');
-            String className = key.substring(0, lastDot);
-            String oldFieldName = key.substring(lastDot + 1);
-            
-            ProgramClass clazz = mapping.getProgramClass(className);
-            if (clazz != null) {
-                clazz.renameField(oldFieldName, newName);
-            }
-        }
-    }
-    
-    /**
-     * Applies method renames to the mapping.
-     */
-    private void applyMethodRenames() {
-        for (Map.Entry<String, String> entry : methodNameMappings.entrySet()) {
-            String key = entry.getKey();
-            String newName = entry.getValue();
-            
-            int lastDot = key.lastIndexOf('.');
-            String className = key.substring(0, lastDot);
-            String methodPart = key.substring(lastDot + 1);
-            
-            int parenIndex = methodPart.indexOf('(');
-            String oldMethodName = methodPart.substring(0, parenIndex);
-            String descriptor = methodPart.substring(parenIndex);
-            
-            ProgramClass clazz = mapping.getProgramClass(className);
-            if (clazz != null) {
-                clazz.renameMethod(oldMethodName, descriptor, newName);
-            }
-        }
-    }
-    
-    /**
-     * Updates all class, field, and method references after renaming.
-     */
-    private void updateReferences() {
-        for (ProgramClass clazz : mapping.getProgramClasses()) {
-            updateClassReferences(clazz);
-        }
-    }
-    
-    /**
-     * Updates references within a single class.
-     * @param clazz the ProgramClass to update
-     */
-    private void updateClassReferences(ProgramClass clazz) {
-        if (clazz.getSuperName() != null && classNameMappings.containsKey(clazz.getSuperName())) {
-            clazz.setSuperName(classNameMappings.get(clazz.getSuperName()));
-        }
-
-        List<String> interfaces = new ArrayList<>(clazz.getInterfaces());
-        boolean ifaceChanged = false;
-        for (int i = 0; i < interfaces.size(); i++) {
-            String interfaceName = interfaces.get(i);
-            if (classNameMappings.containsKey(interfaceName)) {
-                interfaces.set(i, classNameMappings.get(interfaceName));
-                ifaceChanged = true;
-            }
-        }
-        if (ifaceChanged) {
-            clazz.setInterfaces(interfaces);
-        }
-
-        if (!classNameMappings.isEmpty()) {
-            if (clazz.getSignature() != null) {
-                clazz.setSignature(DescriptorRemapper.remap(clazz.getSignature(), classNameMappings));
-            }
-            ClassNode cn = clazz.getClassNode();
-            if (cn != null) {
-                if (cn.outerMethodDesc != null) {
-                    cn.outerMethodDesc = DescriptorRemapper.remap(cn.outerMethodDesc, classNameMappings);
-                }
-                if (cn.nestHostClass != null && classNameMappings.containsKey(cn.nestHostClass)) {
-                    cn.nestHostClass = classNameMappings.get(cn.nestHostClass);
-                }
-                if (cn.nestMembers != null) {
-                    for (int i = 0; i < cn.nestMembers.size(); i++) {
-                        String m = cn.nestMembers.get(i);
-                        if (classNameMappings.containsKey(m)) {
-                            cn.nestMembers.set(i, classNameMappings.get(m));
-                        }
-                    }
-                }
-                if (cn.permittedSubclasses != null) {
-                    for (int i = 0; i < cn.permittedSubclasses.size(); i++) {
-                        String p = cn.permittedSubclasses.get(i);
-                        if (classNameMappings.containsKey(p)) {
-                            cn.permittedSubclasses.set(i, classNameMappings.get(p));
-                        }
-                    }
-                }
-            }
-            for (ProgramField field : clazz.getFields()) {
-                field.setDescriptor(DescriptorRemapper.remap(field.getDescriptor(), classNameMappings));
-                if (field.getSignature() != null) {
-                    field.setSignature(DescriptorRemapper.remap(field.getSignature(), classNameMappings));
-                }
-            }
-            for (ProgramMethod method : clazz.getMethods()) {
-                method.setDescriptor(DescriptorRemapper.remap(method.getDescriptor(), classNameMappings));
-                if (method.getSignature() != null) {
-                    method.setSignature(DescriptorRemapper.remap(method.getSignature(), classNameMappings));
-                }
-                if (method.getMethodNode() != null && method.getMethodNode().exceptions != null) {
-                    List<String> exceptions = method.getMethodNode().exceptions;
-                    for (int i = 0; i < exceptions.size(); i++) {
-                        String ex = exceptions.get(i);
-                        if (classNameMappings.containsKey(ex)) {
-                            exceptions.set(i, classNameMappings.get(ex));
-                        }
-                    }
-                    method.setExceptions(exceptions.toArray(new String[0]));
-                }
-            }
-        }
-
-        for (ProgramMethod method : clazz.getMethods()) {
-            updateMethodReferences(method);
-        }
-        if (!classNameMappings.isEmpty()) {
-            for (ProgramMethod method : clazz.getMethods()) {
-                remapInstructionDescriptors(method);
-            }
-        }
-    }
-
-    /**
-     * Updates owners and simple names in instructions (descriptors are remapped afterward).
-     */
-    private void updateMethodReferences(ProgramMethod method) {
-        if (method.getMethodNode() != null && method.getMethodNode().instructions != null) {
-            method.getMethodNode().instructions.forEach(insn -> {
-                if (insn instanceof FieldInsnNode fieldInsn) {
-                    String originalFieldOwner = fieldInsn.owner;
-                    if (classNameMappings.containsKey(fieldInsn.owner)) {
-                        fieldInsn.owner = classNameMappings.get(fieldInsn.owner);
-                    }
-
-                    String fieldKey = originalFieldOwner + "." + fieldInsn.name;
-                    if (fieldNameMappings.containsKey(fieldKey)) {
-                        fieldInsn.name = fieldNameMappings.get(fieldKey);
-                    }
-                }
-
-                if (insn instanceof MethodInsnNode methodInsn) {
-                    String originalMethodOwner = methodInsn.owner;
-                    if (classNameMappings.containsKey(methodInsn.owner)) {
-                        methodInsn.owner = classNameMappings.get(methodInsn.owner);
-                    }
-
-                    String methodKey = originalMethodOwner + "." + methodInsn.name + methodInsn.desc;
-                    if (methodNameMappings.containsKey(methodKey)) {
-                        methodInsn.name = methodNameMappings.get(methodKey);
-                    }
-                }
-
-                if (insn instanceof TypeInsnNode typeInsn) {
-                    if (classNameMappings.containsKey(typeInsn.desc)) {
-                        typeInsn.desc = classNameMappings.get(typeInsn.desc);
-                    }
-                }
-            });
-        }
-    }
-
-    private void remapInstructionDescriptors(ProgramMethod method) {
-        if (method.getMethodNode() == null || method.getMethodNode().instructions == null) {
-            return;
-        }
-        for (AbstractInsnNode insn = method.getMethodNode().instructions.getFirst();
-             insn != null;
-             insn = insn.getNext()) {
-            if (insn instanceof FieldInsnNode fieldInsn) {
-                fieldInsn.desc = DescriptorRemapper.remap(fieldInsn.desc, classNameMappings);
-            } else if (insn instanceof MethodInsnNode methodInsn) {
-                methodInsn.desc = DescriptorRemapper.remap(methodInsn.desc, classNameMappings);
-            } else if (insn instanceof InvokeDynamicInsnNode indy) {
-                indy.desc = DescriptorRemapper.remap(indy.desc, classNameMappings);
-                remapBootstrapArguments(indy.bsmArgs);
-            } else if (insn instanceof LdcInsnNode ldc && ldc.cst instanceof Type t) {
-                Type remapped = remapTypeConstant(t);
-                if (remapped != t) {
-                    ldc.cst = remapped;
-                }
-            } else if (insn instanceof MultiANewArrayInsnNode multi) {
-                multi.desc = DescriptorRemapper.remap(multi.desc, classNameMappings);
-            }
-        }
-    }
-
-    private void remapBootstrapArguments(Object[] args) {
-        if (args == null) {
-            return;
-        }
-        for (int i = 0; i < args.length; i++) {
-            Object arg = args[i];
-            if (arg instanceof Type t) {
-                args[i] = remapTypeConstant(t);
-            } else if (arg instanceof Handle h) {
-                args[i] = remapHandle(h);
-            }
-        }
-    }
-
-    private Type remapTypeConstant(Type t) {
-        if (t.getSort() == Type.OBJECT) {
-            String in = t.getInternalName();
-            if (classNameMappings.containsKey(in)) {
-                return Type.getObjectType(classNameMappings.get(in));
-            }
-            return t;
-        }
-        if (t.getSort() == Type.ARRAY) {
-            String d = t.getDescriptor();
-            String remapped = DescriptorRemapper.remap(d, classNameMappings);
-            return remapped.equals(d) ? t : Type.getType(remapped);
-        }
-        return t;
-    }
-
-    private Handle remapHandle(Handle h) {
-        String owner = classNameMappings.getOrDefault(h.getOwner(), h.getOwner());
-        String desc = DescriptorRemapper.remap(h.getDesc(), classNameMappings);
-        if (owner.equals(h.getOwner()) && desc.equals(h.getDesc())) {
-            return h;
-        }
-        return new Handle(h.getTag(), owner, h.getName(), desc, h.isInterface());
-    }
 
     /**
      * Applies a transformation function to all classes.
@@ -875,18 +940,40 @@ public class ClassTransformer {
     }
     
     /**
-     * Returns a copy of the field name mappings.
-     * @return a map of class+field to new field names
+     * Returns a copy of the field name mappings (legacy string-keyed form).
+     * @return a map of {@code "owner.fieldName"} to new field names
      */
     public Map<String, String> getFieldNameMappings() {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<FieldKey, String> e : fieldNameMappings.entrySet()) {
+            result.put(e.getKey().toKeyString(), e.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Returns a copy of the field name mappings with typed keys.
+     */
+    public Map<FieldKey, String> getTypedFieldNameMappings() {
         return new HashMap<>(fieldNameMappings);
     }
     
     /**
-     * Returns a copy of the method name mappings.
-     * @return a map of class+method+descriptor to new method names
+     * Returns a copy of the method name mappings (legacy string-keyed form).
+     * @return a map of {@code "owner.methodName(descriptor)"} to new method names
      */
     public Map<String, String> getMethodNameMappings() {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<MethodKey, String> e : methodNameMappings.entrySet()) {
+            result.put(e.getKey().toKeyString(), e.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Returns a copy of the method name mappings with typed keys.
+     */
+    public Map<MethodKey, String> getTypedMethodNameMappings() {
         return new HashMap<>(methodNameMappings);
     }
     
