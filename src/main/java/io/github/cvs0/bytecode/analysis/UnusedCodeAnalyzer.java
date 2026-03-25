@@ -1,6 +1,8 @@
 package io.github.cvs0.bytecode.analysis;
 
+import io.github.cvs0.bytecode.FieldKey;
 import io.github.cvs0.bytecode.JarMapping;
+import io.github.cvs0.bytecode.MethodKey;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
@@ -25,7 +27,7 @@ public class UnusedCodeAnalyzer {
 
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
-                String methodKey = clazz.getName() + "." + method.getName() + method.getDescriptor();
+                String methodKey = MethodKey.of(clazz.getName(), method.getName(), method.getDescriptor()).toKeyString();
                 allMethods.add(methodKey);
 
                 if (isEntryPoint(method)) {
@@ -56,7 +58,7 @@ public class UnusedCodeAnalyzer {
 
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramField field : clazz.getFields()) {
-                String fieldKey = clazz.getName() + "." + field.getName();
+                String fieldKey = FieldKey.of(clazz.getName(), field.getName()).toKeyString();
                 allFields.add(fieldKey);
             }
         }
@@ -97,7 +99,7 @@ public class UnusedCodeAnalyzer {
             for (AbstractInsnNode insn : method.getMethodNode().instructions) {
                 if (insn instanceof MethodInsnNode) {
                     MethodInsnNode methodInsn = (MethodInsnNode) insn;
-                    String methodKey = methodInsn.owner + "." + methodInsn.name + methodInsn.desc;
+                    String methodKey = MethodKey.of(methodInsn.owner, methodInsn.name, methodInsn.desc).toKeyString();
                     references.add(methodKey);
                 }
             }
@@ -117,7 +119,7 @@ public class UnusedCodeAnalyzer {
             for (AbstractInsnNode insn : method.getMethodNode().instructions) {
                 if (insn instanceof FieldInsnNode) {
                     FieldInsnNode fieldInsn = (FieldInsnNode) insn;
-                    String fieldKey = fieldInsn.owner + "." + fieldInsn.name;
+                    String fieldKey = FieldKey.of(fieldInsn.owner, fieldInsn.name).toKeyString();
                     references.add(fieldKey);
                 }
             }
@@ -135,7 +137,7 @@ public class UnusedCodeAnalyzer {
 
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
-                String methodKey = clazz.getName() + "." + method.getName() + method.getDescriptor();
+                String methodKey = MethodKey.of(clazz.getName(), method.getName(), method.getDescriptor()).toKeyString();
                 complexity.put(methodKey, calculateMethodComplexity(method));
             }
         }
@@ -178,7 +180,7 @@ public class UnusedCodeAnalyzer {
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
                 if (hasUnreachableCode(method)) {
-                    String methodKey = clazz.getName() + "." + method.getName() + method.getDescriptor();
+                    String methodKey = MethodKey.of(clazz.getName(), method.getName(), method.getDescriptor()).toKeyString();
                     deadCode.add(methodKey);
                 }
             }
@@ -236,7 +238,7 @@ public class UnusedCodeAnalyzer {
 
         for (ProgramClass clazz : mapping.getProgramClasses()) {
             for (ProgramMethod method : clazz.getMethods()) {
-                String methodKey = clazz.getName() + "." + method.getName() + method.getDescriptor();
+                String methodKey = MethodKey.of(clazz.getName(), method.getName(), method.getDescriptor()).toKeyString();
                 methodSizes.put(methodKey, method.getInstructionCount());
             }
         }

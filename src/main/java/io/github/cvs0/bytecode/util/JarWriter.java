@@ -96,7 +96,7 @@ public class JarWriter {
             ModuleInfoClass mi = mapping.getModuleInfo(path);
             if (mi != null && mi.getClassNode() != null) {
                 String jarPath = mi.getJarEntryName();
-                writeRawClassEntry(jos, jarPath, classBytesFromNode(mi.getClassNode()));
+                writeRawClassEntry(jos, jarPath, classBytesFromNode(mi.getClassNode(), mapping));
                 writtenPaths.add(jarPath);
             }
         }
@@ -110,7 +110,7 @@ public class JarWriter {
             PackageInfoClass pi = mapping.getPackageInfo(path);
             if (pi != null && pi.getClassNode() != null) {
                 String jarPath = pi.getJarEntryName();
-                writeRawClassEntry(jos, jarPath, classBytesFromNode(pi.getClassNode()));
+                writeRawClassEntry(jos, jarPath, classBytesFromNode(pi.getClassNode(), mapping));
                 writtenPaths.add(jarPath);
             }
         }
@@ -125,7 +125,7 @@ public class JarWriter {
             if (!writtenPaths.add(jarPath)) {
                 continue;
             }
-            writeClassEntry(jos, programClass, jarPath);
+            writeClassEntry(jos, programClass, jarPath, mapping);
         }
     }
 
@@ -136,16 +136,16 @@ public class JarWriter {
         jos.closeEntry();
     }
 
-    static byte[] classBytesFromNode(ClassNode classNode) {
-        ClassWriter classWriter = new SafeClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
+    static byte[] classBytesFromNode(ClassNode classNode, JarMapping mapping) {
+        ClassWriter classWriter = new SafeClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES, mapping);
         classNode.accept(classWriter);
         return classWriter.toByteArray();
     }
 
-    private static void writeClassEntry(JarOutputStream jos, ProgramClass programClass, String jarPath) throws IOException {
+    private static void writeClassEntry(JarOutputStream jos, ProgramClass programClass, String jarPath, JarMapping mapping) throws IOException {
         JarEntry entry = new JarEntry(jarPath);
         jos.putNextEntry(entry);
-        jos.write(generateClassBytes(programClass));
+        jos.write(generateClassBytes(programClass, mapping));
         jos.closeEntry();
     }
 
@@ -157,9 +157,9 @@ public class JarWriter {
         jos.closeEntry();
     }
 
-    private static byte[] generateClassBytes(ProgramClass programClass) {
+    private static byte[] generateClassBytes(ProgramClass programClass, JarMapping mapping) {
         if (programClass.getClassNode() != null) {
-            return classBytesFromNode(programClass.getClassNode());
+            return classBytesFromNode(programClass.getClassNode(), mapping);
         }
         throw new IllegalStateException("Cannot generate bytes for class without ClassNode: " + programClass.getName());
     }
@@ -172,14 +172,14 @@ public class JarWriter {
     }
 
     public static void writeClass(ProgramClass programClass, File outputFile) throws IOException {
-        byte[] classBytes = generateClassBytes(programClass);
+        byte[] classBytes = generateClassBytes(programClass, null);
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
             fos.write(classBytes);
         }
     }
 
     public static byte[] getClassBytes(ProgramClass programClass) {
-        return generateClassBytes(programClass);
+        return generateClassBytes(programClass, null);
     }
 
     public static void writeResource(String resourceName, byte[] resourceData, File outputDir) throws IOException {

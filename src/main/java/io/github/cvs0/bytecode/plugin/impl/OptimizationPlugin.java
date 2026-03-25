@@ -1,6 +1,8 @@
 package io.github.cvs0.bytecode.plugin.impl;
 
+import io.github.cvs0.bytecode.FieldKey;
 import io.github.cvs0.bytecode.JarMapping;
+import io.github.cvs0.bytecode.MethodKey;
 import io.github.cvs0.bytecode.analysis.UnusedCodeAnalyzer;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.plugin.AbstractPlugin;
@@ -54,26 +56,26 @@ public class OptimizationPlugin extends AbstractPlugin {
 
     private static void removeUnusedMethods(JarMapping mapping) {
         for (String key : UnusedCodeAnalyzer.findUnusedMethods(mapping)) {
-            ParsedMethod m = ParsedMethod.parse(key);
+            MethodKey m = MethodKey.parse(key);
             if (m == null) {
                 continue;
             }
-            ProgramClass clazz = mapping.getProgramClass(m.owner);
+            ProgramClass clazz = mapping.getProgramClass(m.owner());
             if (clazz != null) {
-                clazz.removeMethod(m.name, m.descriptor);
+                clazz.removeMethod(m.name(), m.descriptor());
             }
         }
     }
 
     private static void removeUnusedFields(JarMapping mapping) {
         for (String key : UnusedCodeAnalyzer.findUnusedFields(mapping)) {
-            ParsedField f = ParsedField.parse(key);
+            FieldKey f = FieldKey.parse(key);
             if (f == null) {
                 continue;
             }
-            ProgramClass clazz = mapping.getProgramClass(f.owner);
+            ProgramClass clazz = mapping.getProgramClass(f.owner());
             if (clazz != null) {
-                clazz.removeField(f.name);
+                clazz.removeField(f.name());
             }
         }
     }
@@ -109,32 +111,6 @@ public class OptimizationPlugin extends AbstractPlugin {
             return Opcodes.ICONST_M1;
         }
         return Opcodes.ICONST_0 + value;
-    }
-
-    private record ParsedField(String owner, String name) {
-        static ParsedField parse(String key) {
-            int d = key.indexOf('.');
-            if (d <= 0 || d == key.length() - 1) {
-                return null;
-            }
-            return new ParsedField(key.substring(0, d), key.substring(d + 1));
-        }
-    }
-
-    private record ParsedMethod(String owner, String name, String descriptor) {
-        static ParsedMethod parse(String key) {
-            int d = key.indexOf('.');
-            if (d <= 0 || d >= key.length() - 1) {
-                return null;
-            }
-            String owner = key.substring(0, d);
-            String rest = key.substring(d + 1);
-            int p = rest.indexOf('(');
-            if (p <= 0) {
-                return null;
-            }
-            return new ParsedMethod(owner, rest.substring(0, p), rest.substring(p));
-        }
     }
 
     @Override

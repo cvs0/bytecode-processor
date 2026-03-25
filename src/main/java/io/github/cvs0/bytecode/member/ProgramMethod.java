@@ -19,25 +19,35 @@ import java.util.*;
 public class ProgramMethod {
     @Getter
     private String name;
+    
     @Getter
     private String descriptor;
+
     @Getter
     private String signature;
+
     @Getter
     private int access;
     private String[] exceptions;
+
     @Getter
     private int maxStack;
+
     @Getter
     private int maxLocals;
 
     @Getter
     @Setter
     private ProgramClass owner;
+
     private final List<Attribute> attributes = new ArrayList<>();
+
     private final List<Instruction> instructions = new ArrayList<>();
+
     private final List<LocalVariable> localVariables = new ArrayList<>();
+
     private final List<LineNumber> lineNumbers = new ArrayList<>();
+
     @Getter
     @Setter
     private MethodNode methodNode;

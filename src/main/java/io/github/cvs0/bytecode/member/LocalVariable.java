@@ -1,6 +1,6 @@
 package io.github.cvs0.bytecode.member;
 
-import io.github.cvs0.bytecode.util.ObjectUtils;
+import java.util.Objects;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -135,9 +135,9 @@ public class LocalVariable {
         return startPc == that.startPc &&
                length == that.length &&
                index == that.index &&
-               ObjectUtils.equals(name, that.name) &&
-               ObjectUtils.equals(descriptor, that.descriptor) &&
-               ObjectUtils.equals(signature, that.signature);
+               Objects.equals(name, that.name) &&
+               Objects.equals(descriptor, that.descriptor) &&
+               Objects.equals(signature, that.signature);
     }
 
     /**
@@ -145,6 +145,6 @@ public class LocalVariable {
      */
     @Override
     public int hashCode() {
-        return ObjectUtils.combinedHashCode(name, descriptor, signature, startPc, length, index);
+        return Objects.hash(name, descriptor, signature, startPc, length, index);
     }
 }

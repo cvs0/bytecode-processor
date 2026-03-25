@@ -22,19 +22,25 @@ import java.util.Objects;
 public class ProgramField {
     @Getter
     private String name;
+    
     @Getter
     private String descriptor;
+    
     @Getter
     private String signature;
+
     @Getter
     private int access;
+
     @Getter
     private Object value;
 
     @Getter
     @Setter
     private ProgramClass owner;
+
     private final List<Attribute> attributes = new ArrayList<>();
+
     @Getter
     @Setter
     private FieldNode fieldNode;
