@@ -1,5 +1,7 @@
 package io.github.cvs0.bytecode.instruction;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.objectweb.asm.tree.AbstractInsnNode;
 
 /**
@@ -7,10 +9,15 @@ import org.objectweb.asm.tree.AbstractInsnNode;
  * Supports opcode/type access and classification helpers for all JVM instruction types.
  */
 public class Instruction {
+    @Getter
     private AbstractInsnNode instructionNode;
+    @Getter
+    @Setter
     private int opcode;
+    @Getter
+    @Setter
     private int type;
-    
+
     /**
      * Constructs an Instruction from an ASM AbstractInsnNode.
      * @param instructionNode the ASM instruction node
@@ -30,14 +37,6 @@ public class Instruction {
     }
 
     /**
-     * Returns the underlying ASM instruction node.
-     * @return the AbstractInsnNode
-     */
-    public AbstractInsnNode getInstructionNode() {
-        return instructionNode;
-    }
-
-    /**
      * Sets the underlying ASM instruction node and updates opcode/type.
      * @param instructionNode the new ASM node
      */
@@ -47,39 +46,6 @@ public class Instruction {
         this.type = instructionNode.getType();
     }
 
-    /**
-     * Returns the opcode of this instruction.
-     * @return the opcode value
-     */
-    public int getOpcode() {
-        return opcode;
-    }
-
-    /**
-     * Sets the opcode of this instruction.
-     * @param opcode the opcode value
-     */
-    public void setOpcode(int opcode) {
-        this.opcode = opcode;
-    }
-
-    /**
-     * Returns the type of this instruction (see ASM AbstractInsnNode constants).
-     * @return the type value
-     */
-    public int getType() {
-        return type;
-    }
-
-    /**
-     * Sets the type of this instruction.
-     * @param type the type value
-     */
-    public void setType(int type) {
-        this.type = type;
-    }
-
-    
     /**
      * Returns true if this is a simple instruction (INSN).
      */
@@ -107,55 +73,55 @@ public class Instruction {
     public boolean isTypeInsn() {
         return type == AbstractInsnNode.TYPE_INSN;
     }
-    
+
     public boolean isFieldInsn() {
         return type == AbstractInsnNode.FIELD_INSN;
     }
-    
+
     public boolean isMethodInsn() {
         return type == AbstractInsnNode.METHOD_INSN;
     }
-    
+
     public boolean isInvokeDynamicInsn() {
         return type == AbstractInsnNode.INVOKE_DYNAMIC_INSN;
     }
-    
+
     public boolean isJumpInsn() {
         return type == AbstractInsnNode.JUMP_INSN;
     }
-    
+
     public boolean isLabelInsn() {
         return type == AbstractInsnNode.LABEL;
     }
-    
+
     public boolean isLdcInsn() {
         return type == AbstractInsnNode.LDC_INSN;
     }
-    
+
     public boolean isIincInsn() {
         return type == AbstractInsnNode.IINC_INSN;
     }
-    
+
     public boolean isTableSwitchInsn() {
         return type == AbstractInsnNode.TABLESWITCH_INSN;
     }
-    
+
     public boolean isLookupSwitchInsn() {
         return type == AbstractInsnNode.LOOKUPSWITCH_INSN;
     }
-    
+
     public boolean isMultiANewArrayInsn() {
         return type == AbstractInsnNode.MULTIANEWARRAY_INSN;
     }
-    
+
     public boolean isFrameInsn() {
         return type == AbstractInsnNode.FRAME;
     }
-    
+
     public boolean isLineNumberInsn() {
         return type == AbstractInsnNode.LINE;
     }
-    
+
     /**
      * Returns the name of the opcode for this instruction.
      * @return the opcode name

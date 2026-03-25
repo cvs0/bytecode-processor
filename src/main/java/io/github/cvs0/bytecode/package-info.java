@@ -7,9 +7,9 @@
  *   <li><b>Load</b> — {@link io.github.cvs0.bytecode.util.JarReader#read(java.io.File, JarMapping)}</li>
  *   <li><b>Transform</b> — {@link io.github.cvs0.bytecode.transform.ClassTransformer} and/or
  *       {@link io.github.cvs0.bytecode.plugin.PluginManager#processWithPlugins(JarMapping)}</li>
- *   <li><b>Post-process</b> — {@link JarMapping#remapManifestMainClass(java.util.Map)}, {@link JarMapping#remapServiceLoaderResourcePaths(java.util.Map)},
- *       {@link JarMapping#remapServiceLoaderImplementations(java.util.Map)}</li>
- *   <li><b>Write</b> — {@link io.github.cvs0.bytecode.util.JarWriter} or {@link JarMapping#writeToJar(java.nio.file.Path)}</li>
+ *   <li><b>Post-process</b> — {@link io.github.cvs0.bytecode.JarMapping#remapManifestMainClass(java.util.Map)}, {@link io.github.cvs0.bytecode.JarMapping#remapServiceLoaderResourcePaths(java.util.Map)},
+ *       {@link io.github.cvs0.bytecode.JarMapping#remapServiceLoaderImplementations(java.util.Map)}</li>
+ *   <li><b>Write</b> — {@link io.github.cvs0.bytecode.util.JarWriter} or {@link io.github.cvs0.bytecode.JarMapping#writeToJar(java.nio.file.Path)}</li>
  * </ol>
  *
  * <p>Analysis without writing: {@link io.github.cvs0.bytecode.analysis.DependencyAnalyzer},
