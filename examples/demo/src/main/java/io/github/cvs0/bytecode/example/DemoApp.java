@@ -2,6 +2,8 @@ package io.github.cvs0.bytecode.example;
 
 import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.analysis.JarStatistics;
+import io.github.cvs0.bytecode.clazz.ProgramClass;
+import io.github.cvs0.bytecode.member.ProgramField;
 
 import java.nio.file.Path;
 
@@ -21,6 +23,19 @@ public final class DemoApp {
         Path jar = Path.of(args[0]).toAbsolutePath().normalize();
         JarMapping mapping = JarMapping.fromJar(jar);
         JarStatistics stats = JarStatistics.from(mapping);
+
+        for (ProgramClass clazz : mapping.getProgramClasses())
+        {
+            System.out.println(clazz.getName());
+
+            for (ProgramField field : clazz.getFields())
+            {
+                System.out.println(field.getName());
+
+                ProgramField newField = new ProgramField(field.getName() + "1", "Ljava/lang/String;", 0x0001);
+                clazz.addField(newField);
+            }
+        }
 
         System.out.println("JAR: " + jar);
         System.out.println("Application:       " + stats.getApplicationClassCount());
