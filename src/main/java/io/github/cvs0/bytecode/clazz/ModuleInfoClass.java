@@ -7,7 +7,7 @@ import org.objectweb.asm.tree.ClassNode;
 import java.util.Objects;
 
 /**
- * A {@code module-info.class} entry from a JAR (possibly under a multi-release path).
+ * A {@code module-info.class} entry from a JAR.
  * Kept separate from {@link ProgramClass} because the file is a module descriptor, not a normal type.
  */
 @Getter

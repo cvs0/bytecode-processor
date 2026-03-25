@@ -1,5 +1,8 @@
 package io.github.cvs0.bytecode.transform;
 
+import io.github.cvs0.bytecode.FieldKey;
+import io.github.cvs0.bytecode.MethodKey;
+
 import java.util.Map;
 import java.util.Objects;
 
@@ -20,18 +23,18 @@ import java.util.Objects;
 public final class MappingRemapper implements Remapper {
 
     private final Map<String, String> classMap;
-    private final Map<String, String> fieldMap;
-    private final Map<String, String> methodMap;
+    private final Map<FieldKey, String> fieldMap;
+    private final Map<MethodKey, String> methodMap;
     private final org.objectweb.asm.commons.Remapper asmRemapper;
 
     /**
      * @param classMap  internal-name → internal-name (e.g. {@code com/foo/Bar → com/foo/Baz})
-     * @param fieldMap  {@code owner.fieldName → newFieldName}
-     * @param methodMap {@code owner.methodName(descriptor) → newName}
+     * @param fieldMap  {@link FieldKey} → new field name
+     * @param methodMap {@link MethodKey} → new method name
      */
     public MappingRemapper(Map<String, String> classMap,
-                           Map<String, String> fieldMap,
-                           Map<String, String> methodMap) {
+                           Map<FieldKey, String> fieldMap,
+                           Map<MethodKey, String> methodMap) {
         this.classMap = Objects.requireNonNull(classMap, "classMap");
         this.fieldMap = Objects.requireNonNull(fieldMap, "fieldMap");
         this.methodMap = Objects.requireNonNull(methodMap, "methodMap");
@@ -48,12 +51,12 @@ public final class MappingRemapper implements Remapper {
 
     @Override
     public String remapMethod(String owner, String name, String descriptor) {
-        return methodMap.getOrDefault(owner + "." + name + descriptor, name);
+        return methodMap.getOrDefault(MethodKey.of(owner, name, descriptor), name);
     }
 
     @Override
     public String remapField(String owner, String name, String descriptor) {
-        return fieldMap.getOrDefault(owner + "." + name, name);
+        return fieldMap.getOrDefault(FieldKey.of(owner, name), name);
     }
 
     @Override

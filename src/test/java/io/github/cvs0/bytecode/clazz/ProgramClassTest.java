@@ -192,4 +192,54 @@ class ProgramClassTest {
         assertTrue(programClass.getAttributes().contains(attr1));
         assertTrue(programClass.getAttributes().contains(attr2));
     }
+
+    @Test
+    void applicationClassDefaultsToTrue() {
+        assertTrue(programClass.isApplicationClass());
+    }
+
+    @Test
+    void applicationClassToggle() {
+        programClass.setApplicationClass(false);
+        assertFalse(programClass.isApplicationClass());
+        programClass.setApplicationClass(true);
+        assertTrue(programClass.isApplicationClass());
+    }
+
+    @Test
+    void constructorFromClassNodeDefaultsApplicationClassTrue() {
+        ClassNode cn = new ClassNode();
+        cn.name = "a/B";
+        cn.version = Opcodes.V17;
+        cn.superName = "java/lang/Object";
+        ProgramClass pc = new ProgramClass(cn);
+        assertTrue(pc.isApplicationClass());
+    }
+
+    @Test
+    void parentAndChildRelationships() {
+        ProgramClass parent = new ProgramClass("a/Parent");
+        ProgramClass child = new ProgramClass("a/Child");
+        child.setParentProgramClass(parent);
+        parent.addChildProgramClass(child);
+
+        assertSame(parent, child.getParentProgramClass());
+        assertEquals(1, parent.getChildProgramClasses().size());
+        assertSame(child, parent.getChildProgramClasses().get(0));
+    }
+
+    @Test
+    void resolvedAndUnresolvedInterfaces() {
+        ProgramClass iface = new ProgramClass("a/Iface");
+        programClass.addResolvedInterface(iface);
+        programClass.addUnresolvedSuperType("external/Missing");
+
+        assertEquals(1, programClass.getResolvedInterfaces().size());
+        assertTrue(programClass.getUnresolvedSuperTypes().contains("external/Missing"));
+    }
+
+    @Test
+    void jarEntryNameDefaultsFromName() {
+        assertEquals("com/example/TestClass.class", programClass.getJarEntryName());
+    }
 }

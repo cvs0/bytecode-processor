@@ -143,4 +143,78 @@ class JarMappingTest {
     void testJarPath() {
         assertEquals("test.jar", jarMapping.getJarPath());
     }
+
+    @Test
+    void addClassOverwritesByName() {
+        ProgramClass first = new ProgramClass("com/example/Dup");
+        ProgramClass second = new ProgramClass("com/example/Dup");
+        jarMapping.addClass(first);
+        jarMapping.addClass(second);
+        assertSame(second, jarMapping.getProgramClass("com/example/Dup"));
+    }
+
+    @Test
+    void getApplicationClassesFiltersEmbedded() {
+        ProgramClass app = new ProgramClass("app/Main");
+        ProgramClass lib = new ProgramClass("shaded/Dep");
+        lib.setApplicationClass(false);
+        jarMapping.addClass(app);
+        jarMapping.addClass(lib);
+
+        assertEquals(1, jarMapping.getApplicationClasses().size());
+        assertTrue(jarMapping.getApplicationClasses().stream().anyMatch(c -> "app/Main".equals(c.getName())));
+    }
+
+    @Test
+    void getEmbeddedLibraryProgramClassesFiltersApplication() {
+        ProgramClass app = new ProgramClass("app/Main");
+        ProgramClass lib = new ProgramClass("shaded/Dep");
+        lib.setApplicationClass(false);
+        jarMapping.addClass(app);
+        jarMapping.addClass(lib);
+
+        assertEquals(1, jarMapping.getEmbeddedLibraryProgramClasses().size());
+        assertTrue(jarMapping.getEmbeddedLibraryProgramClasses().stream().anyMatch(c -> "shaded/Dep".equals(c.getName())));
+    }
+
+    @Test
+    void renameClassUpdatesJarEntryPath() {
+        ProgramClass clazz = new ProgramClass("com/old/Name");
+        jarMapping.addClass(clazz);
+
+        jarMapping.renameClass("com/old/Name", "com/new/Name");
+
+        assertEquals("com/new/Name.class", clazz.getJarEntryName());
+    }
+
+    @Test
+    void renameClassRemovesOldJarEntryKey() {
+        ProgramClass clazz = new ProgramClass("com/old/Name");
+        jarMapping.addClass(clazz);
+
+        jarMapping.renameClass("com/old/Name", "com/new/Name");
+
+        // Old entry key should be gone; iterating all classes shows only the renamed one
+        assertEquals(1, jarMapping.getProgramClasses().size());
+        assertEquals("com/new/Name", jarMapping.getProgramClasses().iterator().next().getName());
+    }
+
+    @Test
+    void removeClassCleansUpBothIndices() {
+        ProgramClass clazz = new ProgramClass("a/B");
+        jarMapping.addClass(clazz);
+
+        jarMapping.removeClass("a/B");
+
+        assertNull(jarMapping.getProgramClass("a/B"));
+        assertFalse(jarMapping.containsClass("a/B"));
+        assertEquals(0, jarMapping.getProgramClasses().size());
+    }
+
+    @Test
+    void renameNonExistentClassIsNoOp() {
+        jarMapping.renameClass("no/Such", "no/Other");
+        assertNull(jarMapping.getProgramClass("no/Such"));
+        assertNull(jarMapping.getProgramClass("no/Other"));
+    }
 }

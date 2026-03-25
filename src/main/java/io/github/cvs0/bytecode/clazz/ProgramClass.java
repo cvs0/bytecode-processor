@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * is also resolved at read time, eliminating the need for a separate inheritance graph.</p>
  */
 public class ProgramClass {
-    /** JAR entry path for this class (e.g. {@code com/foo/Bar.class} or a multi-release path). */
+    /** JAR entry path for this class (e.g. {@code com/foo/Bar.class}). */
     private String jarEntryName;
 
     @Getter
@@ -92,11 +92,6 @@ public class ProgramClass {
     @Setter
     private boolean applicationClass = true;
 
-    /**
-     * @deprecated use {@link #isApplicationClass()} / {@link #setApplicationClass(boolean)} instead
-     */
-    @Deprecated
-    private boolean embeddedLibrary;
 
     /**
      * Constructs a ProgramClass with the given name.
@@ -601,21 +596,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * @deprecated use {@link #isApplicationClass()}
-     */
-    @Deprecated
-    public boolean isEmbeddedLibrary() {
-        return !applicationClass;
-    }
-
-    /**
-     * @deprecated use {@link #setApplicationClass(boolean)}
-     */
-    @Deprecated
-    public void setEmbeddedLibrary(boolean embeddedLibrary) {
-        this.applicationClass = !embeddedLibrary;
-    }
 
     /** Direct subclasses / implementors that are ProgramClasses in this mapping. */
     public List<ProgramClass> getChildProgramClasses() {

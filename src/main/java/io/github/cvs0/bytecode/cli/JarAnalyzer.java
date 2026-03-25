@@ -1,4 +1,4 @@
-package io.github.cvs0.bytecode.test;
+package io.github.cvs0.bytecode.cli;
 
 import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.analysis.DependencyAnalyzer;
@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import java.util.*;
 
 /**
- * Standalone utility for testing the bytecode processor on real JAR files.
+ * Standalone utility for analyzing JAR files with the bytecode processor.
  * Run this class with a JAR file path as argument to analyze it.
  */
 public class JarAnalyzer {
@@ -45,7 +45,7 @@ public class JarAnalyzer {
     }
     
     /**
-     * Runs the full console report for a JAR (used by {@link io.github.cvs0.bytecode.cli.BytecodeCli}).
+     * Runs the full console report for a JAR (used by {@link BytecodeCli}).
      */
     public static void analyzeJar(Path jarPath) {
         long startTime = System.currentTimeMillis();
