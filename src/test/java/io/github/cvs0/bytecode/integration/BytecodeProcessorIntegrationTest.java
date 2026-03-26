@@ -9,7 +9,7 @@ import io.github.cvs0.bytecode.attribute.SignatureAttribute;
 import io.github.cvs0.bytecode.plugin.PluginManager;
 import io.github.cvs0.bytecode.plugin.impl.ObfuscationPlugin;
 import io.github.cvs0.bytecode.plugin.impl.OptimizationPlugin;
-import io.github.cvs0.bytecode.transform.ClassTransformer;
+import io.github.cvs0.bytecode.transform.transformer.ClassTransformer;
 import io.github.cvs0.bytecode.analysis.DependencyAnalyzer;
 import io.github.cvs0.bytecode.analysis.UnusedCodeAnalyzer;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,10 +1,12 @@
-package io.github.cvs0.bytecode.util;
+package io.github.cvs0.bytecode.io;
 
 import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.clazz.ModuleInfoClass;
 import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
+import io.github.cvs0.bytecode.transform.MappingRemapper;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.tree.ClassNode;
 
 import java.io.ByteArrayInputStream;
@@ -39,6 +41,26 @@ public class JarWriter {
 
     public static void write(JarMapping mapping, File outputFile) throws IOException {
         write(mapping, outputFile, resolveManifest(mapping));
+    }
+
+    /**
+     * Writes the given {@link JarMapping} to an in-memory byte array instead of a file on disk.
+     * Useful for classloader injection, network transfer, or byte-backed URL schemes.
+     *
+     * @param mapping the mapping to serialize
+     * @return the complete JAR file as a byte array
+     * @throws IOException if serialization fails
+     */
+    public static byte[] writeToBytes(JarMapping mapping) throws IOException {
+        Manifest manifest = resolveManifest(mapping);
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             JarOutputStream jos = new JarOutputStream(baos, manifest)) {
+            Set<String> writtenPaths = new HashSet<>();
+            writeClassLikeEntries(mapping, jos, writtenPaths);
+            writeResources(mapping, jos, writtenPaths);
+            jos.finish();
+            return baos.toByteArray();
+        }
     }
 
     private static Manifest resolveManifest(JarMapping mapping) {
@@ -184,36 +206,43 @@ public class JarWriter {
     }
 
     /**
-     * Generates class bytes using the provided mapping for hierarchy-aware frame computation.
+     * Returns the bytecode for a {@link ProgramClass}, using the given {@link JarMapping}
+     * for hierarchy-aware frame computation via {@link SafeClassWriter}.
      *
      * @param programClass the class to serialize
-     * @param mapping      the JarMapping used to resolve super-class hierarchies during frame
-     *                     computation (may be {@code null} for simple cases)
-     * @return the raw {@code .class} bytes
+     * @param mapping      the JarMapping for hierarchy resolution (may be {@code null})
+     * @return the class bytes
      */
     public static byte[] getClassBytes(ProgramClass programClass, JarMapping mapping) {
         return generateClassBytes(programClass, mapping);
     }
 
     /**
-     * Writes an entire {@link JarMapping} to an in-memory JAR (byte array) instead of disk.
-     * Useful for classloader injection via URL schemes or network transfer.
+     * Remaps a single {@link ProgramClass} through the given {@link MappingRemapper} and returns
+     * the resulting bytecode. The {@code mapping} is used by {@link SafeClassWriter} to resolve
+     * common supertypes during frame computation.
      *
-     * @param mapping the mapping to serialize
-     * @return the complete JAR file as a byte array
-     * @throws IOException if serialization fails
+     * <p>This is the streaming-friendly counterpart to
+     * {@link io.github.cvs0.bytecode.transform.ClassTransformer#applyTransformations()} — it
+     * transforms one class at a time without touching the rest of the mapping.</p>
+     *
+     * @param programClass the class to remap
+     * @param remapper     the rename mappings to apply
+     * @param mapping      the JarMapping for hierarchy-aware frame computation (may be {@code null}
+     *                     if frame computation is not needed)
+     * @return the remapped class bytes
      */
-    public static byte[] writeToBytes(JarMapping mapping) throws IOException {
-        Objects.requireNonNull(mapping, "mapping");
-        Manifest manifest = resolveManifest(mapping);
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             JarOutputStream jos = new JarOutputStream(baos, manifest)) {
-            Set<String> writtenPaths = new HashSet<>();
-            writeClassLikeEntries(mapping, jos, writtenPaths);
-            writeResources(mapping, jos, writtenPaths);
-            jos.finish();
-            return baos.toByteArray();
+    public static byte[] remapClassBytes(ProgramClass programClass, MappingRemapper remapper, JarMapping mapping) {
+        Objects.requireNonNull(programClass, "programClass");
+        Objects.requireNonNull(remapper, "remapper");
+        ClassNode original = programClass.getClassNode();
+        if (original == null) {
+            throw new IllegalStateException("Cannot remap class without ClassNode: " + programClass.getName());
         }
+        ClassNode remapped = new ClassNode();
+        ClassRemapper cr = new ClassRemapper(remapped, remapper.toAsm());
+        original.accept(cr);
+        return classBytesFromNode(remapped, mapping);
     }
 
     public static void writeResource(String resourceName, byte[] resourceData, File outputDir) throws IOException {

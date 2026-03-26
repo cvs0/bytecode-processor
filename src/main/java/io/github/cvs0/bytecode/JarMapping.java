@@ -4,11 +4,13 @@ import io.github.cvs0.bytecode.clazz.LibraryClass;
 import io.github.cvs0.bytecode.clazz.ModuleInfoClass;
 import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
+import io.github.cvs0.bytecode.runtime.clazz.ClassBytesSource;
+import io.github.cvs0.bytecode.runtime.resource.ResourceBytesSource;
+import io.github.cvs0.bytecode.io.JarWriter;
+import io.github.cvs0.bytecode.transform.patcher.ManifestPatcher;
+import io.github.cvs0.bytecode.transform.patcher.ServiceLoaderResourcePatcher;
 import io.github.cvs0.bytecode.util.JarLayout;
 import io.github.cvs0.bytecode.util.JarReader;
-import io.github.cvs0.bytecode.util.JarWriter;
-import io.github.cvs0.bytecode.util.ManifestPatcher;
-import io.github.cvs0.bytecode.util.ServiceLoaderResourcePatcher;
 import lombok.Getter;
 
 import java.io.File;
@@ -38,7 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @see io.github.cvs0.bytecode.util.BytecodeNames
  */
-public class JarMapping {
+public class JarMapping implements ClassBytesSource, ResourceBytesSource {
     /**
      * Program classes keyed by JAR entry path (e.g. {@code com/foo/Bar.class}), unique per {@code ZipEntry}.
      */
@@ -57,6 +59,15 @@ public class JarMapping {
 
     public JarMapping(String jarPath) {
         this.jarPath = Objects.requireNonNull(jarPath, "jarPath");
+    }
+
+    /**
+     * Creates an empty JarMapping for in-memory / streaming use — no backing JAR file.
+     * Classes can be added incrementally via {@link #addClassFromBytes(byte[])} or
+     * {@link #addClass(ProgramClass)}, then linked with {@link #resolveHierarchy()}.
+     */
+    public JarMapping() {
+        this.jarPath = "<in-memory>";
     }
 
     public static JarMapping fromJar(String jarPath) throws IOException {
@@ -133,6 +144,34 @@ public class JarMapping {
         Objects.requireNonNull(clazz, "clazz");
         programClassesByJarEntry.put(clazz.getJarEntryName(), clazz);
         programClassesByName.put(clazz.getName(), clazz);
+    }
+
+    /**
+     * Parses raw class bytes into a fully enriched {@link ProgramClass} and adds it to this mapping.
+     * Does <b>not</b> resolve hierarchy links — call {@link #resolveHierarchy()} after adding
+     * all classes for this batch.
+     *
+     * @param classBytes the raw {@code .class} file bytes
+     * @return the newly created ProgramClass
+     * @throws java.io.IOException if the bytes cannot be parsed
+     */
+    public ProgramClass addClassFromBytes(byte[] classBytes) throws java.io.IOException {
+        ProgramClass pc = JarReader.readClass(classBytes);
+        addClass(pc);
+        return pc;
+    }
+
+    /**
+     * Resolves hierarchy links (parent/child, interfaces, external overrides) for all classes
+     * in this mapping. This is called automatically when loading from a JAR via
+     * {@link JarReader#read(java.io.File, JarMapping)}, but must be called manually after
+     * incrementally adding classes with {@link #addClassFromBytes(byte[])} or
+     * {@link #addClass(ProgramClass)}.
+     *
+     * <p>Safe to call multiple times — existing links are cleared before rebuilding.</p>
+     */
+    public void resolveHierarchy() {
+        JarReader.resolveHierarchyAndOverrides(this);
     }
 
     public void addLibraryClass(LibraryClass clazz) {
@@ -345,5 +384,106 @@ public class JarMapping {
     /** Number of {@code .class} entries modeled as {@link ProgramClass} (one per JAR path). */
     public int getProgramClassEntryCount() {
         return programClassesByJarEntry.size();
+    }
+
+    // ========================================================================
+    //  ClassBytesSource / ResourceBytesSource implementation
+    // ========================================================================
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Resolves bytes by looking up the {@link ProgramClass} by internal name and serializing
+     * its {@link org.objectweb.asm.tree.ClassNode} using hierarchy-aware frame computation.</p>
+     */
+    @Override
+    public byte[] getClassBytes(String internalName) {
+        ProgramClass pc = programClassesByName.get(internalName);
+        if (pc == null || pc.getClassNode() == null) {
+            return null;
+        }
+        return JarWriter.getClassBytes(pc, this);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public byte[] getResourceBytes(String resourcePath) {
+        return resources.get(resourcePath);
+    }
+
+    // ========================================================================
+    //  Merge
+    // ========================================================================
+
+    /**
+     * Merges all classes, resources, module-info, and package-info from {@code other} into this
+     * mapping. Entries from {@code other} take precedence when both mappings contain the same key.
+     *
+     * <p>Hierarchy links are <b>not</b> re-resolved automatically — call
+     * {@link #resolveHierarchy()} after merging if you need parent/child/interface links.</p>
+     *
+     * @param other the mapping to merge into this one
+     */
+    public void merge(JarMapping other) {
+        Objects.requireNonNull(other, "other");
+        for (ProgramClass pc : other.getProgramClasses()) {
+            addClass(pc);
+        }
+        for (LibraryClass lc : other.getLibraryClasses()) {
+            addLibraryClass(lc);
+        }
+        for (String name : other.getResourceNames()) {
+            byte[] data = other.getResource(name);
+            if (data != null) {
+                addResource(name, data);
+            }
+        }
+        for (String entry : other.getModuleInfoEntryNames()) {
+            ModuleInfoClass mi = other.getModuleInfo(entry);
+            if (mi != null) {
+                addModuleInfo(entry, mi);
+            }
+        }
+        for (String entry : other.getPackageInfoEntryNames()) {
+            PackageInfoClass pi = other.getPackageInfo(entry);
+            if (pi != null) {
+                addPackageInfo(entry, pi);
+            }
+        }
+    }
+
+    // ========================================================================
+    //  Export
+    // ========================================================================
+
+    /**
+     * Exports all program classes as a map of internal name → raw class bytes. Useful for
+     * feeding classes into custom classloaders or byte-backed URL schemes.
+     *
+     * <p>Uses hierarchy-aware frame computation via {@link JarWriter#getClassBytes(ProgramClass, JarMapping)}.</p>
+     *
+     * @return an unmodifiable map of internal class name → class bytes
+     */
+    public Map<String, byte[]> toClassBytesMap() {
+        Map<String, byte[]> result = new LinkedHashMap<>();
+        for (ProgramClass pc : programClassesByName.values()) {
+            if (pc.getClassNode() != null) {
+                result.put(pc.getName(), JarWriter.getClassBytes(pc, this));
+            }
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    /**
+     * Writes this mapping to an in-memory JAR (byte array) instead of disk. Useful for
+     * classloader injection via URL schemes or network transfer.
+     *
+     * @return the JAR file bytes
+     * @throws IOException if serialization fails
+     */
+    public byte[] writeToBytes() throws IOException {
+        return JarWriter.writeToBytes(this);
     }
 }

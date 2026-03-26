@@ -625,6 +625,18 @@ public class ProgramClass {
     }
 
     /**
+     * Clears all hierarchy links (parent, children, resolved interfaces, unresolved supertypes)
+     * so that {@link io.github.cvs0.bytecode.util.JarReader#resolveHierarchyAndOverrides} can
+     * safely rebuild them.
+     */
+    public void clearHierarchyLinks() {
+        parentProgramClass = null;
+        childProgramClasses.clear();
+        resolvedInterfaces.clear();
+        unresolvedSuperTypes.clear();
+    }
+
+    /**
      * Collects every ProgramClass in this class's hierarchy — walking up through parents
      * and down through children — including {@code this}.
      */

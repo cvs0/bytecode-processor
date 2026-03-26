@@ -2,6 +2,7 @@ package io.github.cvs0.bytecode.transform;
 
 import io.github.cvs0.bytecode.FieldKey;
 import io.github.cvs0.bytecode.MethodKey;
+import io.github.cvs0.bytecode.transform.remapper.Remapper;
 
 import java.util.Map;
 import java.util.Objects;

@@ -15,6 +15,10 @@ module bytecode.processor {
     exports io.github.cvs0.bytecode.plugin;
     exports io.github.cvs0.bytecode.cli;
     exports io.github.cvs0.bytecode.transform;
+    exports io.github.cvs0.bytecode.io;
+    exports io.github.cvs0.bytecode.runtime;
 
     opens io.github.cvs0.bytecode.cli to info.picocli;
+    exports io.github.cvs0.bytecode.runtime.clazz;
+    exports io.github.cvs0.bytecode.runtime.url;
 }

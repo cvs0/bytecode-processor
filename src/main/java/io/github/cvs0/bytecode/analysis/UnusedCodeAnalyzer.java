@@ -1,8 +1,8 @@
 package io.github.cvs0.bytecode.analysis;
 
-import io.github.cvs0.bytecode.FieldKey;
+import io.github.cvs0.bytecode.transform.FieldKey;
 import io.github.cvs0.bytecode.JarMapping;
-import io.github.cvs0.bytecode.MethodKey;
+import io.github.cvs0.bytecode.transform.MethodKey;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
