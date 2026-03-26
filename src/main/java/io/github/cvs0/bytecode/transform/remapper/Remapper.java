@@ -1,4 +1,4 @@
-package io.github.cvs0.bytecode.transform;
+package io.github.cvs0.bytecode.transform.remapper;
 
 /**
  * Contract for remapping JVM class names, member names, descriptors, and signatures.

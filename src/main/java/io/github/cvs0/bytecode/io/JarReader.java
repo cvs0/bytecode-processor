@@ -1,4 +1,4 @@
-package io.github.cvs0.bytecode.util;
+package io.github.cvs0.bytecode.io;
 
 import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.clazz.ModuleInfoClass;
@@ -127,40 +127,8 @@ public class JarReader {
                 return;
             }
 
-            ProgramClass programClass = new ProgramClass(classNode);
-            programClass.setJarEntryName(entry.getName());
             int classVersion = classReader.readShort(6);
-            programClass.setClassVersion(classVersion);
-            if (classNode.recordComponents != null) {
-                for (RecordComponentNode rc : classNode.recordComponents) {
-                    programClass.addRecordComponent(rc);
-                }
-            }
-            if (classNode.nestHostClass != null) {
-                programClass.setNestHostClass(classNode.nestHostClass);
-            }
-            if (classNode.nestMembers != null) {
-                for (String member : classNode.nestMembers) {
-                    programClass.addNestMember(member);
-                }
-            }
-            if (classNode.permittedSubclasses != null) {
-                for (String subclass : classNode.permittedSubclasses) {
-                    programClass.addPermittedSubclass(subclass);
-                }
-            }
-            if (classNode.fields != null) {
-                for (FieldNode fieldNode : classNode.fields) {
-                    ProgramField field = new ProgramField(fieldNode);
-                    programClass.addField(field);
-                }
-            }
-            if (classNode.methods != null) {
-                for (MethodNode methodNode : classNode.methods) {
-                    ProgramMethod method = new ProgramMethod(methodNode);
-                    programClass.addMethod(method);
-                }
-            }
+            ProgramClass programClass = enrichProgramClass(classNode, entry.getName(), classVersion);
             mapping.addClass(programClass);
         } catch (Exception e) {
             throw new IOException("Failed to load class entry: " + entry.getName(), e);
@@ -189,24 +157,7 @@ public class JarReader {
      */
     public static ProgramClass readClass(File classFile) throws IOException {
         try (FileInputStream fis = new FileInputStream(classFile)) {
-            byte[] classBytes = fis.readAllBytes();
-            ClassReader classReader = new ClassReader(classBytes);
-            ClassNode classNode = new ClassNode();
-            classReader.accept(classNode, 0);
-            ProgramClass programClass = new ProgramClass(classNode);
-            if (classNode.fields != null) {
-                for (FieldNode fieldNode : classNode.fields) {
-                    ProgramField field = new ProgramField(fieldNode);
-                    programClass.addField(field);
-                }
-            }
-            if (classNode.methods != null) {
-                for (MethodNode methodNode : classNode.methods) {
-                    ProgramMethod method = new ProgramMethod(methodNode);
-                    programClass.addMethod(method);
-                }
-            }
-            return programClass;
+            return readClass(fis.readAllBytes());
         }
     }
 
@@ -220,17 +171,48 @@ public class JarReader {
         ClassReader classReader = new ClassReader(classBytes);
         ClassNode classNode = new ClassNode();
         classReader.accept(classNode, 0);
+        if (classNode.name == null || classNode.name.isEmpty()) {
+            throw new IOException("Class bytes contain no class name");
+        }
+        int classVersion = classReader.readShort(6);
+        return enrichProgramClass(classNode, classNode.name + ".class", classVersion);
+    }
+
+    /**
+     * Builds a fully enriched {@link ProgramClass} from a parsed {@link ClassNode},
+     * populating all metadata: fields, methods, class version, nest info, sealed classes,
+     * and record components.
+     */
+    private static ProgramClass enrichProgramClass(ClassNode classNode, String jarEntryName, int classVersion) {
         ProgramClass programClass = new ProgramClass(classNode);
+        programClass.setJarEntryName(jarEntryName);
+        programClass.setClassVersion(classVersion);
+        if (classNode.recordComponents != null) {
+            for (RecordComponentNode rc : classNode.recordComponents) {
+                programClass.addRecordComponent(rc);
+            }
+        }
+        if (classNode.nestHostClass != null) {
+            programClass.setNestHostClass(classNode.nestHostClass);
+        }
+        if (classNode.nestMembers != null) {
+            for (String member : classNode.nestMembers) {
+                programClass.addNestMember(member);
+            }
+        }
+        if (classNode.permittedSubclasses != null) {
+            for (String subclass : classNode.permittedSubclasses) {
+                programClass.addPermittedSubclass(subclass);
+            }
+        }
         if (classNode.fields != null) {
             for (FieldNode fieldNode : classNode.fields) {
-                ProgramField field = new ProgramField(fieldNode);
-                programClass.addField(field);
+                programClass.addField(new ProgramField(fieldNode));
             }
         }
         if (classNode.methods != null) {
             for (MethodNode methodNode : classNode.methods) {
-                ProgramMethod method = new ProgramMethod(methodNode);
-                programClass.addMethod(method);
+                programClass.addMethod(new ProgramMethod(methodNode));
             }
         }
         return programClass;
@@ -255,11 +237,16 @@ public class JarReader {
     /**
      * Links every ProgramClass to its parent, children, and resolved interfaces,
      * then marks methods that override external (non-ProgramClass) contracts.
+     */
+    /**
+     * Resolves hierarchy links and external-override flags for all classes in the mapping.
+     * This is called automatically during {@link #read(File, JarMapping)}, but can also be
+     * called manually after incrementally adding classes via {@link #readClass(byte[])}.
      *
-     * <p>Made public so external callers (for example {@link io.github.cvs0.bytecode.JarMapping})
-     * can trigger hierarchy resolution when classes are added incrementally.</p>
+     * <p>Safe to call multiple times — clears existing links before rebuilding.</p>
      */
     public static void resolveHierarchyAndOverrides(JarMapping mapping) {
+        // Clear existing links so this method is safe to call multiple times
         for (ProgramClass pc : mapping.getProgramClasses()) {
             pc.clearHierarchyLinks();
         }

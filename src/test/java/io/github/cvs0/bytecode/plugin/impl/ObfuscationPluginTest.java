@@ -5,7 +5,7 @@ import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
 import io.github.cvs0.bytecode.util.BytecodeNames;
-import io.github.cvs0.bytecode.util.JarLayout;
+import io.github.cvs0.bytecode.io.JarLayout;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;

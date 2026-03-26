@@ -1,4 +1,4 @@
-package io.github.cvs0.bytecode.util;
+package io.github.cvs0.bytecode.transform.patcher;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;

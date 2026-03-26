@@ -4,7 +4,7 @@ import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.clazz.ModuleInfoClass;
 import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
-import io.github.cvs0.bytecode.transform.ClassTransformer;
+import io.github.cvs0.bytecode.transform.transformer.ClassTransformer;
 import io.github.cvs0.bytecode.util.JarReader;
 import io.github.cvs0.bytecode.util.JarWriter;
 import org.junit.jupiter.api.Test;

@@ -5,6 +5,7 @@ import io.github.cvs0.bytecode.clazz.ModuleInfoClass;
 import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramMethod;
+import io.github.cvs0.bytecode.transform.transformer.ClassTransformer;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;

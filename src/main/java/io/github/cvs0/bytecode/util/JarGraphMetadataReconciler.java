@@ -6,6 +6,7 @@ import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.ModuleNode;
+import io.github.cvs0.bytecode.transform.transformer.ClassTransformer;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -17,7 +18,7 @@ import java.util.Set;
  * after renames (e.g. obfuscation). Drops orphan {@code package-info} entries and prunes {@code exports}, {@code opens},
  * and {@code packages} clauses that no longer contain any program type.
  *
- * <p>Invoked automatically at the end of {@link io.github.cvs0.bytecode.transform.ClassTransformer#applyTransformations()}.
+ * <p>Invoked automatically at the end of {@link ClassTransformer#applyTransformations()}.
  * May also be called directly if you mutate a {@link JarMapping} without the transformer.</p>
  *
  * @see BytecodeNames#internalNameToPackage(String)

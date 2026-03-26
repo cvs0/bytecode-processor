@@ -1,5 +1,6 @@
 package io.github.cvs0.bytecode.util;
 
+import io.github.cvs0.bytecode.transform.patcher.ManifestPatcher;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;

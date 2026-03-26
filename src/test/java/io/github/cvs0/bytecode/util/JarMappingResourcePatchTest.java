@@ -1,6 +1,9 @@
 package io.github.cvs0.bytecode.util;
 
 import io.github.cvs0.bytecode.JarMapping;
+import io.github.cvs0.bytecode.io.JarLayout;
+import io.github.cvs0.bytecode.transform.patcher.ManifestPatcher;
+import io.github.cvs0.bytecode.transform.patcher.ServiceLoaderResourcePatcher;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;

@@ -3,7 +3,7 @@ package io.github.cvs0.bytecode;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramMethod;
 import io.github.cvs0.bytecode.plugin.PluginManager;
-import io.github.cvs0.bytecode.transform.ClassTransformer;
+import io.github.cvs0.bytecode.transform.transformer.ClassTransformer;
 import io.github.cvs0.bytecode.util.BytecodeTraversal;
 import org.junit.jupiter.api.Test;
 

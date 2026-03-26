@@ -1,4 +1,4 @@
-package io.github.cvs0.bytecode.transform;
+package io.github.cvs0.bytecode.transform.transformer;
 
 import io.github.cvs0.bytecode.FieldKey;
 import io.github.cvs0.bytecode.JarMapping;
@@ -8,6 +8,10 @@ import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
+import io.github.cvs0.bytecode.transform.StripDebugMode;
+import io.github.cvs0.bytecode.transform.transformer.InstructionTransformer;
+import io.github.cvs0.bytecode.transform.transformer.Transformer;
+import io.github.cvs0.bytecode.transform.MappingRemapper;
 import io.github.cvs0.bytecode.util.BytecodeNames;
 import io.github.cvs0.bytecode.util.BytecodeTraversal;
 import io.github.cvs0.bytecode.util.JarGraphMetadataReconciler;
@@ -79,7 +83,7 @@ public class ClassTransformer implements Transformer {
     public ClassTransformer(JarMapping mapping) {
         this.mapping = Objects.requireNonNull(mapping, "mapping");
     }
-    
+
     /**
      * Schedules a class to be renamed.
      * @param oldName the original class name
@@ -88,7 +92,7 @@ public class ClassTransformer implements Transformer {
     public void renameClass(String oldName, String newName) {
         classNameMappings.put(oldName, newName);
     }
-    
+
     /**
      * Schedules a field to be renamed.
      * @param className the class containing the field
@@ -98,7 +102,7 @@ public class ClassTransformer implements Transformer {
     public void renameField(String className, String oldFieldName, String newFieldName) {
         fieldNameMappings.put(FieldKey.of(className, oldFieldName), newFieldName);
     }
-    
+
     /**
      * Schedules a method to be renamed.
      * @param className the class containing the method
@@ -898,7 +902,7 @@ public class ClassTransformer implements Transformer {
             }
         }
     }
-    
+
     /**
      * Applies a transformation function to all methods.
      * @param transformer the function to apply
@@ -914,7 +918,7 @@ public class ClassTransformer implements Transformer {
             }
         }
     }
-    
+
     /**
      * Applies a transformation function to all fields.
      * @param transformer the function to apply
@@ -930,7 +934,7 @@ public class ClassTransformer implements Transformer {
             }
         }
     }
-    
+
     /**
      * Returns a copy of scheduled class renames (internal slash names). Still populated after
      * {@link #applyTransformations()} for use when updating manifests or diagnostics.
@@ -938,7 +942,7 @@ public class ClassTransformer implements Transformer {
     public Map<String, String> getClassNameMappings() {
         return new HashMap<>(classNameMappings);
     }
-    
+
     /**
      * Returns a copy of the field name mappings (legacy string-keyed form).
      * @return a map of {@code "owner.fieldName"} to new field names
@@ -957,7 +961,7 @@ public class ClassTransformer implements Transformer {
     public Map<FieldKey, String> getTypedFieldNameMappings() {
         return new HashMap<>(fieldNameMappings);
     }
-    
+
     /**
      * Returns a copy of the method name mappings (legacy string-keyed form).
      * @return a map of {@code "owner.methodName(descriptor)"} to new method names
@@ -976,7 +980,7 @@ public class ClassTransformer implements Transformer {
     public Map<MethodKey, String> getTypedMethodNameMappings() {
         return new HashMap<>(methodNameMappings);
     }
-    
+
     /**
      * Clears all scheduled renames.
      */

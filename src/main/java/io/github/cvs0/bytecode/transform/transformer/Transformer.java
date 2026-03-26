@@ -1,4 +1,4 @@
-package io.github.cvs0.bytecode.transform;
+package io.github.cvs0.bytecode.transform.transformer;
 
 import io.github.cvs0.bytecode.JarMapping;
 
