@@ -4,8 +4,8 @@ import io.github.cvs0.bytecode.JarMapping;
 
 /**
  * One stage in the pipeline managed by {@link PluginManager}: {@link #process(JarMapping)} mutates a shared
- * {@link JarMapping} (typically after {@link io.github.cvs0.bytecode.util.JarReader} and before
- * {@link io.github.cvs0.bytecode.util.JarWriter}).
+ * {@link JarMapping} (typically after {@link io.github.cvs0.bytecode.io.JarReader} and before
+ * {@link io.github.cvs0.bytecode.io.JarWriter}).
  */
 public interface Plugin {
     /**

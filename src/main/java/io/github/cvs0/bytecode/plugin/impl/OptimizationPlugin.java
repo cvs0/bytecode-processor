@@ -1,11 +1,11 @@
 package io.github.cvs0.bytecode.plugin.impl;
 
-import io.github.cvs0.bytecode.FieldKey;
 import io.github.cvs0.bytecode.JarMapping;
-import io.github.cvs0.bytecode.MethodKey;
 import io.github.cvs0.bytecode.analysis.UnusedCodeAnalyzer;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.plugin.AbstractPlugin;
+import io.github.cvs0.bytecode.transform.FieldKey;
+import io.github.cvs0.bytecode.transform.MethodKey;
 import io.github.cvs0.bytecode.transform.transformer.InstructionTransformer;
 import io.github.cvs0.bytecode.util.BytecodeTraversal;
 import org.objectweb.asm.Opcodes;

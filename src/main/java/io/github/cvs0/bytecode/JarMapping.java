@@ -6,17 +6,25 @@ import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.runtime.clazz.ClassBytesSource;
 import io.github.cvs0.bytecode.runtime.resource.ResourceBytesSource;
+import io.github.cvs0.bytecode.io.JarLayout;
+import io.github.cvs0.bytecode.io.JarReader;
 import io.github.cvs0.bytecode.io.JarWriter;
 import io.github.cvs0.bytecode.transform.patcher.ManifestPatcher;
 import io.github.cvs0.bytecode.transform.patcher.ServiceLoaderResourcePatcher;
-import io.github.cvs0.bytecode.util.JarLayout;
-import io.github.cvs0.bytecode.util.JarReader;
 import lombok.Getter;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -31,11 +39,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * loaded class.</p>
  *
  * <p><b>Lifecycle</b> — Load with {@link JarReader#read(java.io.File, JarMapping)}; transform with
- * {@link io.github.cvs0.bytecode.transform.ClassTransformer} and/or {@link io.github.cvs0.bytecode.plugin.PluginManager};
+ * {@link io.github.cvs0.bytecode.transform.transformer.ClassTransformer} and/or {@link io.github.cvs0.bytecode.plugin.PluginManager};
  * optional {@link #remapManifestMainClass}, {@link #remapServiceLoaderResourcePaths},
  * {@link #remapServiceLoaderImplementations}; write with {@link #writeToJar(java.nio.file.Path)} or {@link JarWriter}.
  * Metadata reconciliation after renames runs inside
- * {@link io.github.cvs0.bytecode.transform.ClassTransformer#applyTransformations()} via
+ * {@link io.github.cvs0.bytecode.transform.transformer.ClassTransformer#applyTransformations()} via
  * {@link io.github.cvs0.bytecode.util.JarGraphMetadataReconciler}.</p>
  *
  * @see io.github.cvs0.bytecode.util.BytecodeNames

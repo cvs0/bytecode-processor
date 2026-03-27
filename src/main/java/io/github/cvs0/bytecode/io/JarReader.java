@@ -13,10 +13,20 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.ModuleNode;
 import org.objectweb.asm.tree.RecordComponentNode;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -235,10 +245,6 @@ public class JarReader {
     // ========================================================================
 
     /**
-     * Links every ProgramClass to its parent, children, and resolved interfaces,
-     * then marks methods that override external (non-ProgramClass) contracts.
-     */
-    /**
      * Resolves hierarchy links and external-override flags for all classes in the mapping.
      * This is called automatically during {@link #read(File, JarMapping)}, but can also be
      * called manually after incrementally adding classes via {@link #readClass(byte[])}.
@@ -251,7 +257,6 @@ public class JarReader {
             pc.clearHierarchyLinks();
         }
 
-        // Phase 1: wire parent / child / interface links
         for (ProgramClass pc : mapping.getProgramClasses()) {
             String superName = pc.getSuperName();
             if (superName != null) {
