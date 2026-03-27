@@ -3,7 +3,11 @@ package io.github.cvs0.bytecode.attribute;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Represents an annotation attribute, containing a list of annotation entries and visibility information.
@@ -104,7 +108,6 @@ public class AnnotationAttribute extends Attribute {
             this.type = type;
         }
 
-
         /**
          * Sets a value for the given name.
          * @param name the value name
@@ -154,28 +157,15 @@ public class AnnotationAttribute extends Attribute {
          * @return the string value or null
          */
         public String getStringValue(String name) {
-            Object value = values.get(name);
-            return value instanceof String ? (String) value : null;
+            return values.get(name) instanceof String s ? s : null;
         }
 
-        /**
-         * Gets an integer value by name, or null if not present or not an integer.
-         * @param name the value name
-         * @return the integer value or null
-         */
         public Integer getIntValue(String name) {
-            Object value = values.get(name);
-            return value instanceof Integer ? (Integer) value : null;
+            return values.get(name) instanceof Integer i ? i : null;
         }
 
-        /**
-         * Gets a boolean value by name, or null if not present or not a boolean.
-         * @param name the value name
-         * @return the boolean value or null
-         */
         public Boolean getBooleanValue(String name) {
-            Object value = values.get(name);
-            return value instanceof Boolean ? (Boolean) value : null;
+            return values.get(name) instanceof Boolean b ? b : null;
         }
 
         /**

@@ -1,6 +1,7 @@
 package io.github.cvs0.bytecode.plugin;
 
 import io.github.cvs0.bytecode.JarMapping;
+import io.github.cvs0.bytecode.log.BPLogger;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -10,17 +11,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Registers {@link Plugin} instances, runs {@link Plugin#initialize()} once, then {@link #processWithPlugins(JarMapping)}
- * in priority order. Intended to sit between {@link io.github.cvs0.bytecode.util.JarReader} and
- * {@link io.github.cvs0.bytecode.util.JarWriter} on a shared {@link JarMapping}.
+ * in priority order. Intended to sit between {@link io.github.cvs0.bytecode.io.JarReader} and
+ * {@link io.github.cvs0.bytecode.io.JarWriter} on a shared {@link JarMapping}.
  */
 public class PluginManager {
 
-    private static final Logger LOG = Logger.getLogger(PluginManager.class.getName());
+    private static final BPLogger LOG = BPLogger.of(PluginManager.class);
 
     /** Map of plugin names to Plugin instances. */
     private final Map<String, Plugin> plugins = new ConcurrentHashMap<>();
@@ -28,7 +27,7 @@ public class PluginManager {
     private final List<Plugin> sortedPlugins = new ArrayList<>();
     /** Indicates whether plugins have been initialized. */
     private boolean initialized = false;
-    
+
     /**
      * Registers a new plugin with the manager.
      * @param plugin the Plugin to register
@@ -38,20 +37,20 @@ public class PluginManager {
         if (plugin == null) {
             throw new IllegalArgumentException("Plugin cannot be null");
         }
-        
+
         String name = plugin.getName();
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("Plugin name cannot be null or empty");
         }
-        
+
         if (plugins.containsKey(name)) {
             throw new IllegalArgumentException("Plugin with name '" + name + "' is already registered");
         }
-        
+
         plugins.put(name, plugin);
         updateSortedPlugins();
     }
-    
+
     /**
      * Unregisters a plugin by name and performs cleanup.
      * @param name the plugin name
@@ -62,13 +61,13 @@ public class PluginManager {
             try {
                 removed.cleanup();
             } catch (Exception e) {
-                LOG.log(Level.WARNING, "Cleanup failed for plugin '" + name + "'", e);
+                LOG.warn("Cleanup failed for plugin '" + name + "'", e);
                 throw new RuntimeException("Failed to cleanup plugin '" + name + "'", e);
             }
             updateSortedPlugins();
         }
     }
-    
+
     /**
      * Retrieves a plugin by name.
      * @param name the plugin name
@@ -77,7 +76,7 @@ public class PluginManager {
     public Plugin getPlugin(String name) {
         return plugins.get(name);
     }
-    
+
     /**
      * Returns all registered plugins.
      * @return an unmodifiable collection of plugins
@@ -85,7 +84,7 @@ public class PluginManager {
     public Collection<Plugin> getAllPlugins() {
         return Collections.unmodifiableCollection(plugins.values());
     }
-    
+
     /**
      * Returns a list of enabled plugins, sorted by priority.
      * @return a list of enabled plugins
@@ -95,7 +94,7 @@ public class PluginManager {
                 .filter(Plugin::isEnabled)
                 .toList();
     }
-    
+
     /**
      * Initializes all enabled plugins. Safe to call multiple times.
      */
@@ -126,10 +125,10 @@ public class PluginManager {
 
         initialized = true;
     }
-    
+
     /**
      * Processes the given JarMapping with all enabled plugins.
-     * Failures are logged at {@link Level#WARNING} with stack traces; processing continues with remaining plugins.
+     * Failures are logged at WARN level with stack traces; processing continues with remaining plugins.
      *
      * @param mapping the JarMapping to process
      * @return {@code true} if every enabled plugin completed without throwing
@@ -146,12 +145,12 @@ public class PluginManager {
                 plugin.process(mapping);
             } catch (Exception e) {
                 allOk = false;
-                LOG.log(Level.WARNING, "Plugin '" + plugin.getName() + "' failed during process", e);
+                LOG.warn("Plugin '" + plugin.getName() + "' failed during process", e);
             }
         }
         return allOk;
     }
-    
+
     /**
      * Cleans up all registered plugins and resets initialization state.
      */
@@ -160,12 +159,12 @@ public class PluginManager {
             try {
                 plugin.cleanup();
             } catch (Exception e) {
-                LOG.log(Level.WARNING, "Cleanup failed for plugin '" + plugin.getName() + "'", e);
+                LOG.warn("Cleanup failed for plugin '" + plugin.getName() + "'", e);
             }
         }
         initialized = false;
     }
-    
+
     /**
      * Updates the sorted plugin list based on priority.
      */
@@ -174,7 +173,7 @@ public class PluginManager {
         sortedPlugins.addAll(plugins.values());
         sortedPlugins.sort(Comparator.comparingInt(Plugin::getPriority).reversed());
     }
-    
+
     /**
      * Checks if a plugin with the given name is registered.
      * @param name the plugin name
@@ -183,7 +182,7 @@ public class PluginManager {
     public boolean hasPlugin(String name) {
         return plugins.containsKey(name);
     }
-    
+
     /**
      * Returns the number of registered plugins.
      * @return the plugin count
@@ -191,7 +190,7 @@ public class PluginManager {
     public int getPluginCount() {
         return plugins.size();
     }
-    
+
     /**
      * Returns the number of enabled plugins.
      * @return the enabled plugin count
@@ -199,7 +198,7 @@ public class PluginManager {
     public int getEnabledPluginCount() {
         return (int) plugins.values().stream().filter(Plugin::isEnabled).count();
     }
-    
+
     /**
      * Enables a plugin by name if it is configurable.
      * @param name the plugin name
@@ -210,7 +209,7 @@ public class PluginManager {
             ((ConfigurablePlugin) plugin).setEnabled(true);
         }
     }
-    
+
     /**
      * Disables a plugin by name if it is configurable.
      * @param name the plugin name
@@ -221,7 +220,7 @@ public class PluginManager {
             ((ConfigurablePlugin) plugin).setEnabled(false);
         }
     }
-    
+
     /**
      * Returns a list of all registered plugin names.
      * @return a list of plugin names
@@ -229,7 +228,7 @@ public class PluginManager {
     public List<String> getPluginNames() {
         return new ArrayList<>(plugins.keySet());
     }
-    
+
     /**
      * Removes all plugins and performs cleanup.
      */

@@ -4,9 +4,22 @@ import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramMethod;
 import org.objectweb.asm.Type;
-import org.objectweb.asm.tree.*;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MultiANewArrayInsnNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
 
 /**
  * Analyzes dependencies between classes in a bytecode program.
@@ -85,37 +98,33 @@ public class DependencyAnalyzer {
         Set<String> dependencies = new HashSet<>();
 
         switch (insn.getType()) {
-            case AbstractInsnNode.TYPE_INSN:
+            case AbstractInsnNode.TYPE_INSN -> {
                 TypeInsnNode typeInsn = (TypeInsnNode) insn;
                 dependencies.add(typeInsn.desc);
-                break;
-
-            case AbstractInsnNode.FIELD_INSN:
+            }
+            case AbstractInsnNode.FIELD_INSN -> {
                 FieldInsnNode fieldInsn = (FieldInsnNode) insn;
                 dependencies.add(fieldInsn.owner);
-                break;
-
-            case AbstractInsnNode.METHOD_INSN:
+            }
+            case AbstractInsnNode.METHOD_INSN -> {
                 MethodInsnNode methodInsn = (MethodInsnNode) insn;
                 dependencies.add(methodInsn.owner);
-                break;
-
-            case AbstractInsnNode.INVOKE_DYNAMIC_INSN:
+            }
+            case AbstractInsnNode.INVOKE_DYNAMIC_INSN -> {
                 InvokeDynamicInsnNode invokeDynamicInsn = (InvokeDynamicInsnNode) insn;
                 dependencies.addAll(extractTypesFromDescriptor(invokeDynamicInsn.desc));
-                break;
-
-            case AbstractInsnNode.LDC_INSN:
+            }
+            case AbstractInsnNode.LDC_INSN -> {
                 LdcInsnNode ldcInsn = (LdcInsnNode) insn;
                 if (ldcInsn.cst instanceof Type type) {
                     dependencies.add(type.getInternalName());
                 }
-                break;
-                
-            case AbstractInsnNode.MULTIANEWARRAY_INSN:
+            }
+            case AbstractInsnNode.MULTIANEWARRAY_INSN -> {
                 MultiANewArrayInsnNode multiArrayInsn = (MultiANewArrayInsnNode) insn;
                 dependencies.add(multiArrayInsn.desc);
-                break;
+            }
+            default -> { }
         }
 
         return dependencies;

@@ -1,6 +1,6 @@
 package io.github.cvs0.bytecode.clazz;
 
-import io.github.cvs0.bytecode.attribute.*;
+import io.github.cvs0.bytecode.attribute.Attribute;
 import io.github.cvs0.bytecode.member.InnerClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
@@ -12,14 +12,21 @@ import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.RecordComponentNode;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * One {@code .class} entry from a JAR (or similar), with full bytecode via {@link ClassNode} when loaded from disk.
  *
  * <p>Hierarchy links ({@link #getParentProgramClass()}, {@link #getChildProgramClasses()},
- * {@link #getResolvedInterfaces()}) are resolved at read time by the {@link io.github.cvs0.bytecode.util.JarReader},
+ * {@link #getResolvedInterfaces()}) are resolved at read time by the {@link io.github.cvs0.bytecode.io.JarReader},
  * so downstream code never needs to infer relationships.</p>
  *
  * <p>{@link #isApplicationClass()} distinguishes host-project code from shaded dependencies.
@@ -92,7 +99,6 @@ public class ProgramClass {
     @Setter
     private boolean applicationClass = true;
 
-
     /**
      * Constructs a ProgramClass with the given name.
      * @param name the class name
@@ -142,10 +148,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Adds a field to this class.
-     * @param field the ProgramField to add
-     */
     public void addField(ProgramField field) {
         fields.put(field.getName(), field);
         field.setOwner(this);
@@ -164,10 +166,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Adds a method to this class.
-     * @param method the ProgramMethod to add
-     */
     public void addMethod(ProgramMethod method) {
         String key = method.getName() + method.getDescriptor();
         methods.put(key, method);
@@ -189,85 +187,42 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Adds an attribute to this class.
-     * @param attribute the Attribute to add
-     */
     public void addAttribute(Attribute attribute) {
         attributes.add(attribute);
     }
 
-    /**
-     * Adds an inner class to this class.
-     * @param innerClass the InnerClass to add
-     */
     public void addInnerClass(InnerClass innerClass) {
         innerClasses.add(innerClass);
     }
 
-    /**
-     * Removes an inner class from this class.
-     * @param innerClass the InnerClass to remove
-     */
     public void removeInnerClass(InnerClass innerClass) {
         innerClasses.remove(innerClass);
     }
 
-    /**
-     * Gets a field by name.
-     * @param name the field name
-     * @return the ProgramField or null
-     */
     public ProgramField getField(String name) {
         return fields.get(name);
     }
 
-    /**
-     * Gets a method by name and descriptor.
-     * @param name the method name
-     * @param descriptor the method descriptor
-     * @return the ProgramMethod or null
-     */
     public ProgramMethod getMethod(String name, String descriptor) {
         return methods.get(name + descriptor);
     }
 
-    /**
-     * Returns all fields in this class.
-     * @return unmodifiable collection of fields
-     */
     public Collection<ProgramField> getFields() {
         return Collections.unmodifiableCollection(fields.values());
     }
 
-    /**
-     * Returns all methods in this class.
-     * @return unmodifiable collection of methods
-     */
     public Collection<ProgramMethod> getMethods() {
         return Collections.unmodifiableCollection(methods.values());
     }
 
-    /**
-     * Returns all attributes in this class.
-     * @return unmodifiable list of attributes
-     */
     public List<Attribute> getAttributes() {
         return Collections.unmodifiableList(attributes);
     }
 
-    /**
-     * Returns all inner classes in this class.
-     * @return unmodifiable list of inner classes
-     */
     public List<InnerClass> getInnerClasses() {
         return Collections.unmodifiableList(innerClasses);
     }
 
-    /**
-     * Removes a field by name.
-     * @param name the field name
-     */
     public void removeField(String name) {
         ProgramField field = fields.remove(name);
         if (field != null) {
@@ -282,11 +237,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Removes a method by name and descriptor.
-     * @param name the method name
-     * @param descriptor the method descriptor
-     */
     public void removeMethod(String name, String descriptor) {
         ProgramMethod method = methods.remove(name + descriptor);
         if (method != null) {
@@ -301,11 +251,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Renames a field in this class.
-     * @param oldName the old field name
-     * @param newName the new field name
-     */
     public void renameField(String oldName, String newName) {
         ProgramField field = fields.remove(oldName);
         if (field != null) {
@@ -314,12 +259,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Renames a method in this class.
-     * @param oldName the old method name
-     * @param descriptor the method descriptor
-     * @param newName the new method name
-     */
     public void renameMethod(String oldName, String descriptor, String newName) {
         ProgramMethod method = methods.remove(oldName + descriptor);
         if (method != null) {
@@ -352,11 +291,6 @@ public class ProgramClass {
         }
     }
 
-
-    /**
-     * Sets the class name.
-     * @param name the new class name
-     */
     public void setName(String name) {
         this.name = name;
         if (classNode != null) {
@@ -364,10 +298,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Sets the superclass name.
-     * @param superName the new superclass name
-     */
     public void setSuperName(String superName) {
         this.superName = superName;
         if (classNode != null) {
@@ -375,18 +305,10 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Gets the list of interfaces implemented by this class.
-     * @return unmodifiable list of interface names
-     */
     public List<String> getInterfaces() {
         return Collections.unmodifiableList(interfaces);
     }
 
-    /**
-     * Sets the list of interfaces implemented by this class.
-     * @param interfaces the new list of interface names
-     */
     public void setInterfaces(List<String> interfaces) {
         this.interfaces = new ArrayList<>(interfaces);
         if (classNode != null) {
@@ -394,10 +316,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Adds an interface to this class.
-     * @param interfaceName the interface name
-     */
     public void addInterface(String interfaceName) {
         if (!interfaces.contains(interfaceName)) {
             interfaces.add(interfaceName);
@@ -407,10 +325,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Removes an interface from this class.
-     * @param interfaceName the interface name
-     */
     public void removeInterface(String interfaceName) {
         interfaces.remove(interfaceName);
         if (classNode != null) {
@@ -418,10 +332,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Sets the access flags for this class.
-     * @param access the new access flags
-     */
     public void setAccess(int access) {
         this.access = access;
         if (classNode != null) {
@@ -429,10 +339,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Sets the generic signature for this class.
-     * @param signature the new signature
-     */
     public void setSignature(String signature) {
         this.signature = signature;
         if (classNode != null) {
@@ -440,10 +346,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Sets the source file name for this class.
-     * @param sourceFile the new source file name
-     */
     public void setSourceFile(String sourceFile) {
         this.sourceFile = sourceFile;
         if (classNode != null) {
@@ -451,10 +353,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Sets the source debug information for this class.
-     * @param sourceDebug the new source debug info
-     */
     public void setSourceDebug(String sourceDebug) {
         this.sourceDebug = sourceDebug;
         if (classNode != null) {
@@ -462,10 +360,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Sets the outer class name for this class.
-     * @param outerClass the new outer class name
-     */
     public void setOuterClass(String outerClass) {
         this.outerClass = outerClass;
         if (classNode != null) {
@@ -473,10 +367,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Sets the outer method name for this class.
-     * @param outerMethod the new outer method name
-     */
     public void setOuterMethod(String outerMethod) {
         this.outerMethod = outerMethod;
         if (classNode != null) {
@@ -484,10 +374,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Sets the outer method descriptor for this class.
-     * @param outerMethodDesc the new outer method descriptor
-     */
     public void setOuterMethodDesc(String outerMethodDesc) {
         this.outerMethodDesc = outerMethodDesc;
         if (classNode != null) {
@@ -495,107 +381,58 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Returns true if this class is an interface.
-     * @return true if interface
-     */
     public boolean isInterface() {
         return (access & Opcodes.ACC_INTERFACE) != 0;
     }
 
-    /**
-     * Returns true if this class is abstract.
-     * @return true if abstract
-     */
     public boolean isAbstract() {
         return (access & Opcodes.ACC_ABSTRACT) != 0;
     }
 
-    /**
-     * Returns true if this class is final.
-     * @return true if final
-     */
     public boolean isFinal() {
         return (access & Opcodes.ACC_FINAL) != 0;
     }
 
-    /**
-     * Returns true if this class is public.
-     * @return true if public
-     */
     public boolean isPublic() {
         return (access & Opcodes.ACC_PUBLIC) != 0;
     }
 
-    /**
-     * Returns true if this class is private.
-     * @return true if private
-     */
     public boolean isPrivate() {
         return (access & Opcodes.ACC_PRIVATE) != 0;
     }
 
-    /**
-     * Returns true if this class is protected.
-     * @return true if protected
-     */
     public boolean isProtected() {
         return (access & Opcodes.ACC_PROTECTED) != 0;
     }
 
-    /**
-     * Returns true if this class is static.
-     * @return true if static
-     */
     public boolean isStatic() {
         return (access & Opcodes.ACC_STATIC) != 0;
     }
 
-    /**
-     * Returns true if this class is an enum.
-     * @return true if enum
-     */
     public boolean isEnum() {
         return (access & Opcodes.ACC_ENUM) != 0;
     }
 
-    /**
-     * Returns true if this class is an annotation.
-     * @return true if annotation
-     */
     public boolean isAnnotation() {
         return (access & Opcodes.ACC_ANNOTATION) != 0;
     }
 
-    /**
-     * Gets the simple (unqualified) class name.
-     * @return the simple class name
-     */
     public String getSimpleName() {
         int lastSlash = name.lastIndexOf('/');
         return lastSlash >= 0 ? name.substring(lastSlash + 1) : name;
     }
 
-    /**
-     * Gets the package name for this class.
-     * @return the package name
-     */
     public String getPackageName() {
         int lastSlash = name.lastIndexOf('/');
         return lastSlash >= 0 ? name.substring(0, lastSlash).replace('/', '.') : "";
     }
 
-    /**
-     * Sets the class file version.
-     * @param classVersion the class file version
-     */
     public void setClassVersion(int classVersion) {
         this.classVersion = classVersion;
         if (classNode != null) {
             classNode.version = classVersion;
         }
     }
-
 
     /** Direct subclasses / implementors that are ProgramClasses in this mapping. */
     public List<ProgramClass> getChildProgramClasses() {
@@ -626,7 +463,7 @@ public class ProgramClass {
 
     /**
      * Clears all hierarchy links (parent, children, resolved interfaces, unresolved supertypes)
-     * so that {@link io.github.cvs0.bytecode.util.JarReader#resolveHierarchyAndOverrides} can
+     * so that {@link io.github.cvs0.bytecode.io.JarReader#resolveHierarchyAndOverrides} can
      * safely rebuild them.
      */
     public void clearHierarchyLinks() {
@@ -710,18 +547,10 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Gets the list of record components (for records).
-     * @return unmodifiable list of record components
-     */
     public List<RecordComponentNode> getRecordComponents() {
         return Collections.unmodifiableList(recordComponents);
     }
 
-    /**
-     * Adds a record component.
-     * @param rc the record component
-     */
     public void addRecordComponent(RecordComponentNode rc) {
         recordComponents.add(rc);
         if (classNode != null) {
@@ -734,10 +563,6 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Sets the nest host class name.
-     * @param nestHostClass the nest host class name
-     */
     public void setNestHostClass(String nestHostClass) {
         this.nestHostClass = nestHostClass;
         if (classNode != null) {
@@ -745,18 +570,10 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Gets the list of nest member class names.
-     * @return unmodifiable list of nest member class names
-     */
     public List<String> getNestMembers() {
         return Collections.unmodifiableList(nestMembers);
     }
 
-    /**
-     * Adds a nest member class name.
-     * @param member the nest member class name
-     */
     public void addNestMember(String member) {
         if (member == null) {
             return;
@@ -774,18 +591,10 @@ public class ProgramClass {
         }
     }
 
-    /**
-     * Gets the list of permitted subclass names (for sealed classes).
-     * @return unmodifiable list of permitted subclass names
-     */
     public List<String> getPermittedSubclasses() {
         return Collections.unmodifiableList(permittedSubclasses);
     }
 
-    /**
-     * Adds a permitted subclass name.
-     * @param subclass the permitted subclass name
-     */
     public void addPermittedSubclass(String subclass) {
         if (subclass == null) {
             return;
