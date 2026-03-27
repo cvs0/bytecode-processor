@@ -7,9 +7,18 @@ import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.*;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.JumpInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
 
 /**
  * Utility class for analyzing unused code in a JarMapping.
@@ -80,8 +89,8 @@ public class UnusedCodeAnalyzer {
      * @return true if entry point
      */
     private static boolean isEntryPoint(ProgramMethod method) {
-        return method.isPublic() && 
-               ("main".equals(method.getName()) || 
+        return method.isPublic() &&
+               ("main".equals(method.getName()) ||
                 method.isConstructor() ||
                 method.getName().startsWith("get") ||
                 method.getName().startsWith("set") ||
@@ -97,8 +106,7 @@ public class UnusedCodeAnalyzer {
 
         if (method.getMethodNode() != null && method.getMethodNode().instructions != null) {
             for (AbstractInsnNode insn : method.getMethodNode().instructions) {
-                if (insn instanceof MethodInsnNode) {
-                    MethodInsnNode methodInsn = (MethodInsnNode) insn;
+                if (insn instanceof MethodInsnNode methodInsn) {
                     String methodKey = MethodKey.of(methodInsn.owner, methodInsn.name, methodInsn.desc).toKeyString();
                     references.add(methodKey);
                 }
@@ -117,8 +125,7 @@ public class UnusedCodeAnalyzer {
 
         if (method.getMethodNode() != null && method.getMethodNode().instructions != null) {
             for (AbstractInsnNode insn : method.getMethodNode().instructions) {
-                if (insn instanceof FieldInsnNode) {
-                    FieldInsnNode fieldInsn = (FieldInsnNode) insn;
+                if (insn instanceof FieldInsnNode fieldInsn) {
                     String fieldKey = FieldKey.of(fieldInsn.owner, fieldInsn.name).toKeyString();
                     references.add(fieldKey);
                 }
@@ -216,8 +223,7 @@ public class UnusedCodeAnalyzer {
                 queue.add(next);
             }
 
-            if (current instanceof JumpInsnNode) {
-                JumpInsnNode jumpInsn = (JumpInsnNode) current;
+            if (current instanceof JumpInsnNode jumpInsn) {
                 if (!reachable.contains(jumpInsn.label)) {
                     reachable.add(jumpInsn.label);
                     queue.add(jumpInsn.label);

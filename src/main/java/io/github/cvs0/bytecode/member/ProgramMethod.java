@@ -1,6 +1,13 @@
 package io.github.cvs0.bytecode.member;
 
-import io.github.cvs0.bytecode.attribute.*;
+import io.github.cvs0.bytecode.attribute.Attribute;
+import io.github.cvs0.bytecode.attribute.AttributeFactory;
+import io.github.cvs0.bytecode.attribute.CodeAttribute;
+import io.github.cvs0.bytecode.attribute.ExceptionsAttribute;
+import io.github.cvs0.bytecode.attribute.LineNumberTableAttribute;
+import io.github.cvs0.bytecode.attribute.LocalVariableTableAttribute;
+import io.github.cvs0.bytecode.attribute.MethodParametersAttribute;
+import io.github.cvs0.bytecode.attribute.SignatureAttribute;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.instruction.Instruction;
 import lombok.Getter;
@@ -10,7 +17,10 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.MethodNode;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Represents a method in a program class, including its name, descriptor, signature, access flags, instructions, attributes, local variables, and line numbers.
@@ -19,7 +29,7 @@ import java.util.*;
 public class ProgramMethod {
     @Getter
     private String name;
-    
+
     @Getter
     private String descriptor;
 

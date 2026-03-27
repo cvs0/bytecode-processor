@@ -4,8 +4,11 @@ import io.github.cvs0.bytecode.attribute.Attribute;
 import io.github.cvs0.bytecode.clazz.LibraryClass;
 import lombok.Getter;
 import lombok.Setter;
+import org.objectweb.asm.Opcodes;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class LibraryMethod {
     @Getter
@@ -29,7 +32,7 @@ public class LibraryMethod {
     @Getter
     @Setter
     private LibraryClass owner;
-    
+
     private final List<Attribute> attributes = new ArrayList<>();
 
     public LibraryMethod(String name, String descriptor, int access) {
@@ -55,39 +58,39 @@ public class LibraryMethod {
     }
 
     public boolean isStatic() {
-        return (access & 0x0008) != 0;
+        return (access & Opcodes.ACC_STATIC) != 0;
     }
 
     public boolean isFinal() {
-        return (access & 0x0010) != 0;
+        return (access & Opcodes.ACC_FINAL) != 0;
     }
 
     public boolean isPublic() {
-        return (access & 0x0001) != 0;
+        return (access & Opcodes.ACC_PUBLIC) != 0;
     }
 
     public boolean isPrivate() {
-        return (access & 0x0002) != 0;
+        return (access & Opcodes.ACC_PRIVATE) != 0;
     }
 
     public boolean isProtected() {
-        return (access & 0x0004) != 0;
+        return (access & Opcodes.ACC_PROTECTED) != 0;
     }
 
     public boolean isAbstract() {
-        return (access & 0x0400) != 0;
+        return (access & Opcodes.ACC_ABSTRACT) != 0;
     }
 
     public boolean isSynchronized() {
-        return (access & 0x0020) != 0;
+        return (access & Opcodes.ACC_SYNCHRONIZED) != 0;
     }
 
     public boolean isNative() {
-        return (access & 0x0100) != 0;
+        return (access & Opcodes.ACC_NATIVE) != 0;
     }
 
     public boolean isSynthetic() {
-        return (access & 0x1000) != 0;
+        return (access & Opcodes.ACC_SYNTHETIC) != 0;
     }
 
     public boolean isConstructor() {
