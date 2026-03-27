@@ -1,12 +1,10 @@
 package io.github.cvs0.bytecode.plugin;
 
 import io.github.cvs0.bytecode.JarMapping;
+import io.github.cvs0.bytecode.log.BPLogger;
 import lombok.Getter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -87,9 +85,8 @@ class PluginManagerTest {
 
     @Test
     void testProcessWithPluginsReturnsFalseWhenProcessThrows() {
-        Logger log = Logger.getLogger(PluginManager.class.getName());
-        Level saved = log.getLevel();
-        log.setLevel(Level.OFF);
+        BPLogger.Level saved = BPLogger.getLevel();
+        BPLogger.setLevel(BPLogger.Level.ERROR);
         try {
             AbstractPlugin flaky = new AbstractPlugin("Flaky", "1", "x") {
                 @Override
@@ -100,7 +97,7 @@ class PluginManagerTest {
             pluginManager.registerPlugin(flaky);
             assertFalse(pluginManager.processWithPlugins(new JarMapping("x.jar")));
         } finally {
-            log.setLevel(saved);
+            BPLogger.setLevel(saved);
         }
     }
 

@@ -2,6 +2,7 @@ package io.github.cvs0.bytecode.example;
 
 import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.analysis.JarStatistics;
+import io.github.cvs0.bytecode.log.BPLogger;
 
 import java.nio.file.Path;
 
@@ -13,25 +14,27 @@ import java.nio.file.Path;
  */
 public final class DemoApp {
 
+    private static final BPLogger LOG = BPLogger.of(DemoApp.class);
+
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("Usage: DemoApp <path-to.jar>");
+            LOG.error("Usage: DemoApp <path-to.jar>");
             System.exit(2);
         }
         Path jar = Path.of(args[0]).toAbsolutePath().normalize();
         JarMapping mapping = JarMapping.fromJar(jar);
         JarStatistics stats = JarStatistics.from(mapping);
 
-        System.out.println("JAR: " + jar);
-        System.out.println("Application:       " + stats.getApplicationClassCount());
-        System.out.println("Embedded libs:     " + stats.getEmbeddedLibraryClassCount());
-        System.out.println("Total classes:     " + stats.getTotalModeledClassCount());
-        System.out.println("Library total:     " + stats.getLibraryClassCount());
-        System.out.println("Resources:         " + stats.getResourceCount());
-        System.out.println("Methods / fields:  " + stats.getTotalMethods() + " / " + stats.getTotalFields());
-        System.out.println("Interfaces:        " + stats.getInterfaceCount());
-        System.out.println("Module descriptors: " + stats.getModuleDescriptorCount());
-        System.out.println("package-info:       " + stats.getPackageInfoCount());
+        LOG.info("JAR: %s", jar);
+        LOG.info("Application:       %d", stats.getApplicationClassCount());
+        LOG.info("Embedded libs:     %d", stats.getEmbeddedLibraryClassCount());
+        LOG.info("Total classes:     %d", stats.getTotalModeledClassCount());
+        LOG.info("Library total:     %d", stats.getLibraryClassCount());
+        LOG.info("Resources:         %d", stats.getResourceCount());
+        LOG.info("Methods / fields:  %d / %d", stats.getTotalMethods(), stats.getTotalFields());
+        LOG.info("Interfaces:        %d", stats.getInterfaceCount());
+        LOG.info("Module descriptors: %d", stats.getModuleDescriptorCount());
+        LOG.info("package-info:       %d", stats.getPackageInfoCount());
     }
 
     private DemoApp() {}

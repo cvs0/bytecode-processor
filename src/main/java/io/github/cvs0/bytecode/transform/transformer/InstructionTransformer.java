@@ -3,7 +3,10 @@ package io.github.cvs0.bytecode.transform.transformer;
 import io.github.cvs0.bytecode.instruction.Instruction;
 import io.github.cvs0.bytecode.member.ProgramMethod;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.*;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.InsnList;
+import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.TryCatchBlockNode;
 
 import java.util.ArrayList;
 import java.util.List;

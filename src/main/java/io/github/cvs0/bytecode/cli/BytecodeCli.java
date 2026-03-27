@@ -3,6 +3,7 @@ package io.github.cvs0.bytecode.cli;
 import io.github.cvs0.bytecode.JarMapping;
 import io.github.cvs0.bytecode.analysis.DependencyAnalyzer;
 import io.github.cvs0.bytecode.analysis.JarStatistics;
+import io.github.cvs0.bytecode.log.BPLogger;
 import io.github.cvs0.bytecode.plugin.ConfigurablePlugin;
 import io.github.cvs0.bytecode.plugin.Plugin;
 import io.github.cvs0.bytecode.util.BytecodeNames;
@@ -37,6 +38,8 @@ import java.util.concurrent.Callable;
         })
 public class BytecodeCli implements Runnable {
 
+    private static final BPLogger LOG = BPLogger.of(BytecodeCli.class);
+
     /**
      * Resolves {@code Implementation-Version} from the JAR manifest (set by Maven for packaged builds).
      */
@@ -70,7 +73,7 @@ public class BytecodeCli implements Runnable {
         @Override
         public Integer call() {
             if (!Files.isRegularFile(jar)) {
-                System.err.println("JAR not found: " + jar);
+                LOG.error("JAR not found: %s", jar);
                 return 2;
             }
             JarAnalyzer.analyzeJar(jar);
@@ -89,14 +92,13 @@ public class BytecodeCli implements Runnable {
         @Override
         public Integer call() throws Exception {
             if (!Files.isRegularFile(jar)) {
-                System.err.println("JAR not found: " + jar);
+                LOG.error("JAR not found: %s", jar);
                 return 2;
             }
             var mapping = io.github.cvs0.bytecode.JarMapping.fromJar(jar);
             JarStatistics s = JarStatistics.from(mapping);
             if (json) {
-                System.out.printf(
-                        "{\"applicationClasses\":%d,\"embeddedLibraryClasses\":%d,\"totalClasses\":%d,\"libraryClasses\":%d,\"moduleDescriptors\":%d,\"packageInfos\":%d,\"resources\":%d,\"interfaces\":%d,\"abstractClasses\":%d,\"finalClasses\":%d,\"publicClasses\":%d,\"methods\":%d,\"fields\":%d}%n",
+                LOG.info("{\"applicationClasses\":%d,\"embeddedLibraryClasses\":%d,\"totalClasses\":%d,\"libraryClasses\":%d,\"moduleDescriptors\":%d,\"packageInfos\":%d,\"resources\":%d,\"interfaces\":%d,\"abstractClasses\":%d,\"finalClasses\":%d,\"publicClasses\":%d,\"methods\":%d,\"fields\":%d}",
                         s.getApplicationClassCount(),
                         s.getEmbeddedLibraryClassCount(),
                         s.getTotalModeledClassCount(),
@@ -111,18 +113,18 @@ public class BytecodeCli implements Runnable {
                         s.getTotalMethods(),
                         s.getTotalFields());
             } else {
-                System.out.println("Application classes: " + s.getApplicationClassCount());
-                System.out.println("Embedded library classes: " + s.getEmbeddedLibraryClassCount());
-                System.out.println("Total class models: " + s.getTotalModeledClassCount());
-                System.out.println("Module descriptors: " + s.getModuleDescriptorCount());
-                System.out.println("Package infos: " + s.getPackageInfoCount());
-                System.out.println("Resources: " + s.getResourceCount());
-                System.out.println("Interfaces: " + s.getInterfaceCount());
-                System.out.println("Abstract classes: " + s.getAbstractClassCount());
-                System.out.println("Final classes: " + s.getFinalClassCount());
-                System.out.println("Public classes: " + s.getPublicClassCount());
-                System.out.println("Methods: " + s.getTotalMethods());
-                System.out.println("Fields: " + s.getTotalFields());
+                LOG.info("Application classes: %d", s.getApplicationClassCount());
+                LOG.info("Embedded library classes: %d", s.getEmbeddedLibraryClassCount());
+                LOG.info("Total class models: %d", s.getTotalModeledClassCount());
+                LOG.info("Module descriptors: %d", s.getModuleDescriptorCount());
+                LOG.info("Package infos: %d", s.getPackageInfoCount());
+                LOG.info("Resources: %d", s.getResourceCount());
+                LOG.info("Interfaces: %d", s.getInterfaceCount());
+                LOG.info("Abstract classes: %d", s.getAbstractClassCount());
+                LOG.info("Final classes: %d", s.getFinalClassCount());
+                LOG.info("Public classes: %d", s.getPublicClassCount());
+                LOG.info("Methods: %d", s.getTotalMethods());
+                LOG.info("Fields: %d", s.getTotalFields());
             }
             return 0;
         }
@@ -145,27 +147,27 @@ public class BytecodeCli implements Runnable {
         @Override
         public Integer call() throws Exception {
             if (!Files.isRegularFile(jar)) {
-                System.err.println("JAR not found: " + jar);
+                LOG.error("JAR not found: %s", jar);
                 return 2;
             }
             var mapping = io.github.cvs0.bytecode.JarMapping.fromJar(jar);
             Map<String, Set<String>> graph = DependencyAnalyzer.buildDependencyGraph(mapping);
-            System.out.println("Dependency nodes (classes in JAR): " + graph.size());
+            LOG.info("Dependency nodes (classes in JAR): %d", graph.size());
             Set<String> cycles = DependencyAnalyzer.findCircularDependencies(mapping);
-            System.out.println("Classes involved in cycles: " + cycles.size());
+            LOG.info("Classes involved in cycles: %d", cycles.size());
             if (className != null && !className.isBlank()) {
                 String internalQuery = normalizeInternalNameForDependencyQuery(className);
                 Set<String> dependents = DependencyAnalyzer.findDependents(mapping, internalQuery);
-                System.out.println("Dependents of " + internalQuery + ": " + dependents.size());
-                dependents.stream().sorted().limit(50).forEach(d -> System.out.println("  " + d));
+                LOG.info("Dependents of %s: %d", internalQuery, dependents.size());
+                dependents.stream().sorted().limit(50).forEach(d -> LOG.info("  %s", d));
                 if (dependents.size() > 50) {
-                    System.out.println("  ... (" + (dependents.size() - 50) + " more)");
+                    LOG.info("  ... (%d more)", dependents.size() - 50);
                 }
             }
             if (dotOut != null) {
                 String dot = DependencyAnalyzer.toDotFormat(graph, "jar");
                 Files.writeString(dotOut, dot);
-                System.out.println("Wrote DOT to " + dotOut.toAbsolutePath());
+                LOG.info("Wrote DOT to %s", dotOut.toAbsolutePath());
             }
             return 0;
         }
@@ -215,11 +217,11 @@ public class BytecodeCli implements Runnable {
         @Override
         public Integer call() throws Exception {
             if (!Files.isRegularFile(input)) {
-                System.err.println("Input JAR not found: " + input);
+                LOG.error("Input JAR not found: %s", input);
                 return 2;
             }
             if (input.normalize().equals(output.normalize())) {
-                System.err.println("Output path must differ from input.");
+                LOG.error("Output path must differ from input.");
                 return 2;
             }
 
@@ -244,7 +246,7 @@ public class BytecodeCli implements Runnable {
                 Files.createDirectories(parent);
             }
             mapping.writeToJar(output);
-            System.out.println("Wrote: " + output.toAbsolutePath().normalize());
+            LOG.info("Wrote: %s", output.toAbsolutePath().normalize());
             return 0;
         }
 

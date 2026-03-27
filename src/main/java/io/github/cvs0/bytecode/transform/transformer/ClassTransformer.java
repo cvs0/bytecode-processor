@@ -1,16 +1,14 @@
 package io.github.cvs0.bytecode.transform.transformer;
 
-import io.github.cvs0.bytecode.FieldKey;
 import io.github.cvs0.bytecode.JarMapping;
-import io.github.cvs0.bytecode.MethodKey;
 import io.github.cvs0.bytecode.clazz.ModuleInfoClass;
 import io.github.cvs0.bytecode.clazz.PackageInfoClass;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
 import io.github.cvs0.bytecode.member.ProgramField;
 import io.github.cvs0.bytecode.member.ProgramMethod;
+import io.github.cvs0.bytecode.transform.FieldKey;
+import io.github.cvs0.bytecode.transform.MethodKey;
 import io.github.cvs0.bytecode.transform.StripDebugMode;
-import io.github.cvs0.bytecode.transform.transformer.InstructionTransformer;
-import io.github.cvs0.bytecode.transform.transformer.Transformer;
 import io.github.cvs0.bytecode.transform.MappingRemapper;
 import io.github.cvs0.bytecode.util.BytecodeNames;
 import io.github.cvs0.bytecode.util.BytecodeTraversal;

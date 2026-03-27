@@ -1,11 +1,11 @@
 package io.github.cvs0.bytecode.io;
 
 import io.github.cvs0.bytecode.JarMapping;
-import io.github.cvs0.bytecode.FieldKey;
-import io.github.cvs0.bytecode.MethodKey;
 import io.github.cvs0.bytecode.analysis.DependencyAnalyzer;
 import io.github.cvs0.bytecode.clazz.ProgramClass;
+import io.github.cvs0.bytecode.transform.FieldKey;
 import io.github.cvs0.bytecode.transform.MappingRemapper;
+import io.github.cvs0.bytecode.transform.MethodKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;

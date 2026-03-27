@@ -223,7 +223,7 @@ public class JarWriter {
      * common supertypes during frame computation.
      *
      * <p>This is the streaming-friendly counterpart to
-     * {@link io.github.cvs0.bytecode.transform.ClassTransformer#applyTransformations()} — it
+     * {@link io.github.cvs0.bytecode.transform.transformer.ClassTransformer#applyTransformations()} — it
      * transforms one class at a time without touching the rest of the mapping.</p>
      *
      * @param programClass the class to remap

@@ -1,6 +1,7 @@
 package io.github.cvs0.bytecode.example;
 
 import io.github.cvs0.bytecode.JarMapping;
+import io.github.cvs0.bytecode.log.BPLogger;
 import io.github.cvs0.bytecode.plugin.impl.ObfuscationPlugin;
 
 import java.nio.file.Files;
@@ -19,6 +20,8 @@ import java.util.Map;
  */
 public final class ObfuscateApp {
 
+    private static final BPLogger LOG = BPLogger.of(ObfuscateApp.class);
+
     public static void main(String[] args) throws Exception {
         if (args.length == 1 && isHelp(args[0])) {
             printUsage();
@@ -31,11 +34,11 @@ public final class ObfuscateApp {
         }
 
         if (!Files.isRegularFile(parsed.input)) {
-            System.err.println("Not a file: " + parsed.input);
+            LOG.error("Not a file: %s", parsed.input);
             System.exit(2);
         }
         if (parsed.input.normalize().equals(parsed.output.normalize())) {
-            System.err.println("Output path must differ from input.");
+            LOG.error("Output path must differ from input.");
             System.exit(2);
         }
 
@@ -55,13 +58,10 @@ public final class ObfuscateApp {
             Files.createDirectories(parent);
         }
         mapping.writeToJar(parsed.output);
-        System.out.println("Wrote obfuscated JAR: " + parsed.output.toAbsolutePath().normalize());
-        System.out.println(
-                "  (program class entries: "
-                        + mapping.getProgramClassEntryCount()
-                        + ", resources: "
-                        + mapping.getResourceCount()
-                        + ")");
+        LOG.info("Wrote obfuscated JAR: %s", parsed.output.toAbsolutePath().normalize());
+        LOG.info("  (program class entries: %d, resources: %d)",
+                mapping.getProgramClassEntryCount(),
+                mapping.getResourceCount());
     }
 
     private static boolean isHelp(String a) {
@@ -69,7 +69,7 @@ public final class ObfuscateApp {
     }
 
     private static void printUsage() {
-        System.err.println(
+        LOG.error(
                 """
                         Usage: ObfuscateApp <input.jar> <output.jar> [options]
 

@@ -21,7 +21,7 @@ import java.util.Set;
  * Class renames preserve the original package structure (only the simple class name is replaced). All application
  * classes in the JAR are processed; only JVM runtime types and known third-party library types are skipped
  * (via {@link BytecodeNames#isUnsafeToRename}). Embedded library classes (shaded dependencies detected
- * by the {@link io.github.cvs0.bytecode.util.JarReader} at load time) are also skipped.</p>
+ * by the {@link io.github.cvs0.bytecode.io.JarReader} at load time) are also skipped.</p>
  *
  * <p>Program classes are visited in sorted name order so naming is stable across runs. All bytecode is
  * updated by the transformer; {@code META-INF/services/*} paths and provider lines plus manifest launch
@@ -32,7 +32,7 @@ import java.util.Set;
  *
  * <p>Method renames are hierarchy-aware: the {@link ClassTransformer} propagates renames across
  * superclasses and subclasses automatically using the hierarchy links built by the
- * {@link io.github.cvs0.bytecode.util.JarReader}, and methods implementing external contracts
+ * {@link io.github.cvs0.bytecode.io.JarReader}, and methods implementing external contracts
  * (e.g. {@code Runnable.run()}) are protected via
  * {@link io.github.cvs0.bytecode.member.ProgramMethod#isSafeToRename()}.</p>
  *
